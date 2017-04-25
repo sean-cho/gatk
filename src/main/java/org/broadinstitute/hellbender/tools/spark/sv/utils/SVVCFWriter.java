@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.spark.sv.utils;
 
+import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import htsjdk.samtools.SAMSequenceDictionary;
@@ -12,6 +13,9 @@ import htsjdk.variant.vcf.VCFHeader;
 import htsjdk.variant.vcf.VCFHeaderLine;
 import htsjdk.variant.vcf.VCFStandardHeaderLines;
 import org.apache.logging.log4j.Logger;
+import org.apache.spark.api.java.JavaRDD;
+import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
+import org.broadinstitute.hellbender.engine.datasources.ReferenceWindowFunctions;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.SvType;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
@@ -39,16 +43,29 @@ public class SVVCFWriter {
      */
     public static void writeVCF(final List<VariantContext> localVariants, final String vcfFileName,
                                 final SAMSequenceDictionary referenceSequenceDictionary, final Logger logger) {
-
         final List<VariantContext> sortedVariantsList = sortVariantsByCoordinate(localVariants, referenceSequenceDictionary);
 
         if (logger != null)
             logNumOfVarByTypes(sortedVariantsList, logger);
 
-        writeVariants(vcfFileName, sortedVariantsList, referenceSequenceDictionary);
+        writeVariants(vcfFileName, sortedVariantsList, referenceSequenceDictionary, getVcfHeader(referenceSequenceDictionary));
     }
 
-    private static void logNumOfVarByTypes(final List<VariantContext> variants, final Logger logger) {
+    static void writeVCF(final PipelineOptions pipelineOptions, final String outputPath, String vcfFileName,
+                         final String fastaReference, final JavaRDD<VariantContext> variantContexts,
+                         final Logger logger) {
+
+        final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource(pipelineOptions, fastaReference, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
+
+        final List<VariantContext> sortedVariantsList = sortVariantsByCoordinate(variantContexts.collect(), referenceSequenceDictionary);
+
+        logNumOfVarByTypes(sortedVariantsList, logger);
+
+        writeVariants(vcfFileName, sortedVariantsList, referenceSequenceDictionary, getVcfHeader(referenceSequenceDictionary));
+    }
+
+
+    private static void logNumOfVarByTypes(final List<VariantContext> sortedVariantsList, final Logger logger) {
 
         logger.info("Discovered a total of " + variants.size() + " records: ");
 
@@ -79,13 +96,13 @@ public class SVVCFWriter {
     }
 
     private static void writeVariants(final String fileName, final List<VariantContext> variantsArrayList,
-                                      final SAMSequenceDictionary referenceSequenceDictionary) {
+                                      final SAMSequenceDictionary referenceSequenceDictionary, final VCFHeader header) {
         try (final OutputStream outputStream
                      = new BufferedOutputStream(BucketUtils.createFile(fileName))) {
 
             final VariantContextWriter vcfWriter = getVariantContextWriter(outputStream, referenceSequenceDictionary);
 
-            vcfWriter.writeHeader(getVcfHeader(referenceSequenceDictionary));
+            vcfWriter.writeHeader(header);
             variantsArrayList.forEach(vcfWriter::add);
             vcfWriter.close();
 
