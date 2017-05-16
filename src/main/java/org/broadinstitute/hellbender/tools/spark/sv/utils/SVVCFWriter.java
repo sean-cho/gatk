@@ -57,7 +57,7 @@ public class SVVCFWriter {
 
         final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource(pipelineOptions, fastaReference, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
 
-        final List<VariantContext> sortedVariantsList = sortVariantsByCoordinate(variantContexts.collect(), referenceSequenceDictionary);
+        final List<? extends VariantContext> sortedVariantsList = sortVariantsByCoordinate(variantContexts.collect(), referenceSequenceDictionary);
 
         logNumOfVarByTypes(sortedVariantsList, logger);
 
@@ -77,14 +77,14 @@ public class SVVCFWriter {
         logger.info("  And none of : " + Sets.difference(SvType.getKnownTypes(), variantsCountByType.keySet()).toString());
     }
 
-
     // TODO: 5/31/18 it has been the case since we output VCF files that some records have exactly the same POS and END, yet with slight differences in annotations (e.g. inserted sequence, homology, etc.) pointing to difference variants;
     //       this sort is to make sure such records are sorted. Ultimately we should decide on what to do (squash them into single records when possible?) with such records.
     @VisibleForTesting
-    public static List<VariantContext> sortVariantsByCoordinate(final List<VariantContext> variants,
+    public static <V extends VariantContext> List<V> sortVariantsByCoordinate(final List<V> variants,
                                                                 final SAMSequenceDictionary referenceSequenceDictionary) {
-        return variants.stream().sorted((VariantContext v1, VariantContext v2) -> {
+        return variants.stream().sorted((V v1, V v2) -> {
             final int x = IntervalUtils.compareLocatables(v1, v2, referenceSequenceDictionary);
+
             if (x == 0) {
                 final String s1 = v1.getAttributeAsString(GATKSVVCFConstants.INSERTED_SEQUENCE, "");
                 final String s2 = v2.getAttributeAsString(GATKSVVCFConstants.INSERTED_SEQUENCE, "");
@@ -95,8 +95,8 @@ public class SVVCFWriter {
         }).collect(SVUtils.arrayListCollector(variants.size()));
     }
 
-    private static void writeVariants(final String fileName, final List<VariantContext> variantsArrayList,
-                                      final SAMSequenceDictionary referenceSequenceDictionary, final VCFHeader header) {
+    private static void writeVariants(final String fileName,
+                                      final List<? extends VariantContext> variantsArrayList, final SAMSequenceDictionary referenceSequenceDictionary, final VCFHeader header) {
         try (final OutputStream outputStream
                      = new BufferedOutputStream(BucketUtils.createFile(fileName))) {
 
