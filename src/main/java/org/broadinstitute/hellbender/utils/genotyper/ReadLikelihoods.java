@@ -13,6 +13,7 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.downsampling.AlleleBiasedDownsamplingUtils;
 import org.broadinstitute.hellbender.utils.pileup.PileupElement;
+import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 
 import java.util.*;
@@ -1123,6 +1124,32 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
         }
     }
 
+    public void removeUniformativeReads(final double minimumLikelihoodDifference) {
+        final List<Integer> readsToRemove = new ArrayList<>();
+        final int numberOfAlleles = alleles.numberOfAlleles();
+        for (int s = 0; s < samples.numberOfSamples(); s++) {
+            readsToRemove.clear();
+            final int numberOfReadsInSample = readsBySampleIndex[s].length;
+            for (int r = 0; r < numberOfReadsInSample; r++) {
+                double best = Double.NEGATIVE_INFINITY;
+                double secondBest = Double.NEGATIVE_INFINITY;
+                for (int a = 0; a < numberOfAlleles; a++) {
+                    final double value = valuesBySampleIndex[s][a][r];
+                    if (value > best) {
+                        best = value; secondBest = best;
+                    } else if (value > secondBest) {
+                        secondBest = value;
+                    }
+                }
+                // == is needed to deal with -Inf as Inf - Inf is NaN.
+                if (best == secondBest || best - secondBest < minimumLikelihoodDifference) {
+                    readsToRemove.add(r);
+                }
+            }
+            removeSampleReads(s, readsToRemove, numberOfAlleles);
+        }
+    }
+
     /**
      * Contains information about the best allele for a read search result.
      */
@@ -1209,6 +1236,9 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
 
     // Requires that the collection passed iterator can remove elements, and it can be modified.
     public void removeSampleReads(final int sampleIndex, final Collection<GATKRead> readsToRemove, final int alleleCount) {
+        Utils.validIndex(sampleIndex, samples.numberOfSamples());
+        Utils.nonNull(readsToRemove);
+        ParamUtils.isPositiveOrZero(alleleCount, "allele count must be 0 or greater");
         final GATKRead[] sampleReads = readsBySampleIndex[sampleIndex];
         final int sampleReadCount = sampleReads.length;
 
