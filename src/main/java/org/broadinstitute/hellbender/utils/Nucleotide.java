@@ -15,7 +15,7 @@ import java.util.stream.LongStream;
  * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
  */
 public enum Nucleotide {
-    A, C, G, T, N, X, INVALID;
+    A, C, G, T, R, Y, S, W, K, M, B, D, H, V, N, X, INVALID;
 
     public static final List<Nucleotide> REGULAR_BASES = Arrays.asList(A, C, G, T);
 
@@ -30,6 +30,17 @@ public enum Nucleotide {
         baseToValue['g'] = baseToValue['G'] = G;
         baseToValue['t'] = baseToValue['T'] = T;
         baseToValue['u'] = baseToValue['U'] = T;
+        baseToValue['r'] = baseToValue['R'] = R;
+        baseToValue['y'] = baseToValue['Y'] = Y;
+        baseToValue['s'] = baseToValue['S'] = S;
+        baseToValue['w'] = baseToValue['W'] = W;
+        baseToValue['k'] = baseToValue['K'] = K;
+        baseToValue['m'] = baseToValue['M'] = M;
+        baseToValue['b'] = baseToValue['B'] = B;
+        baseToValue['d'] = baseToValue['D'] = D;
+        baseToValue['h'] = baseToValue['H'] = H;
+        baseToValue['v'] = baseToValue['V'] = V;
+        baseToValue['n'] = baseToValue['N'] = N;
         baseToValue['x'] = baseToValue['X'] = X;
         baseToValue['n'] = baseToValue['N'] = N;
 
@@ -70,7 +81,7 @@ public enum Nucleotide {
      * @return never {@code null}, but {@link #INVALID} if the base code does not
      * correspond to a valid nucleotide specification.
      */
-    public static Nucleotide valueOf(final byte base) {
+    public static Nucleotide decode(final byte base) {
         return baseToValue[Utils.validIndex(base, baseToValue.length)];
     }
 
@@ -80,10 +91,18 @@ public enum Nucleotide {
 
     /**
      * Checks whether the nucleotide refer to a concrete (rather than ambiguous) base.
-     * @return
+     * @return {@code true} iff this is a concrete nucleotide.
      */
     public boolean isConcrete() {
-        return ordinal() < N.ordinal();
+        return ordinal() <= T.ordinal();
+    }
+
+    /**
+     * Checks whether the nucleotide refer to an ambiguous base.
+     * @return {@code true} iff this is an ambiguous nucleotide.
+     */
+    public boolean isAmbiguous() {
+        return ordinal() > T.ordinal() && this != INVALID;
     }
 
     /**
@@ -115,7 +134,7 @@ public enum Nucleotide {
          * @throws IllegalArgumentException if {@code base} is {@code negative}.
          */
         public void add(final byte base) {
-            add(valueOf(base));
+            add(decode(base));
         }
 
         /**
