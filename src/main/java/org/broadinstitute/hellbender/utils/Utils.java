@@ -5,7 +5,13 @@ import com.google.common.collect.Iterators;
 import com.google.common.primitives.Ints;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.tribble.util.ParsingUtils;
+<<<<<<< HEAD
 import htsjdk.variant.variantcontext.VariantContext;
+=======
+import java.io.FileNotFoundException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+>>>>>>> 7a5d707... Test 01
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.math3.random.RandomDataGenerator;
@@ -19,7 +25,6 @@ import javax.annotation.Nullable;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.math.BigInteger;
 import java.nio.file.Files;
@@ -1184,7 +1189,6 @@ public final class Utils {
         return sorted.get(sorted.size() / 2);
     }
 
-
     /**
      * Splits a String using indexOf instead of regex to speed things up.
      * This method produces the same results as {@link String#split(String)} and {@code String.split(String, 0)},
@@ -1369,9 +1373,38 @@ public final class Utils {
 
     private static Collection<Pattern> compilePatterns(final Collection<String> filters) {
         final Collection<Pattern> patterns = new ArrayList<Pattern>();
-        for (final String filter: filters) {
+        for (final String filter : filters) {
             patterns.add(Pattern.compile(filter));
         }
         return patterns;
+    }
+
+    /**
+     * Returns the number of elements in an iterable.
+     * @param elements the target iterable.
+     * @return 0 or greater.
+     */
+    public static int size(final Iterable<?> elements) {
+        Utils.nonNull(elements);
+        // Considerable speed-up for most {@link Collection} implementations:
+        if (elements instanceof Collection) {
+            return ((Collection)elements).size();
+        } else {
+            return (int) Utils.stream(elements).count();
+        }
+    }
+
+    /**
+     * Checks whether a iterable has any elements.
+     * @param elements the target iterable.
+     * @return {@code true} iff {@code elements} has elements.
+     */
+    public static boolean isEmpty(final Iterable<?> elements) {
+        Utils.nonNull(elements);
+        if (elements instanceof Collection) {
+            return ((Collection)elements).isEmpty();
+        } else {
+            return !elements.iterator().hasNext();
+        }
     }
 }
