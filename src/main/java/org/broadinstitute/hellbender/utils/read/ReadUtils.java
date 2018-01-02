@@ -14,12 +14,24 @@ import htsjdk.samtools.SAMTag;
 import htsjdk.samtools.SAMUtils;
 import htsjdk.samtools.SamStreams;
 import htsjdk.samtools.cram.build.CramIO;
-import java.io.*;
+
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
-import java.util.*;
-
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.Set;
+import java.util.TreeSet;
 import org.apache.commons.lang3.tuple.MutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
@@ -1234,7 +1246,7 @@ public final class ReadUtils {
                 return SamStreams.isCRAMFile(bis);
             }
         }
-        catch (IOException e) {
+        catch (final IOException e) {
             throw new UserException.CouldNotReadInputFile(e.getMessage());
         }
     }
