@@ -7,6 +7,7 @@ import org.broadinstitute.barclay.argparser.Hidden;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 
+import java.io.File;
 import java.io.Serializable;
 
 
