@@ -1,7 +1,6 @@
 package org.broadinstitute.hellbender.tools.spark.sv.utils;
 
-import com.google.cloud.dataflow.sdk.options.PipelineOptions;
-import com.google.cloud.genomics.dataflow.utils.GCSOptions;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import htsjdk.samtools.SAMSequenceDictionary;
@@ -23,7 +22,6 @@ import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
 
 import java.io.BufferedOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.HashSet;
@@ -52,11 +50,11 @@ public class SVVCFWriter {
         writeVariants(vcfFileName, sortedVariantsList, referenceSequenceDictionary, getVcfHeader(referenceSequenceDictionary));
     }
 
-    static void writeVCF(final PipelineOptions pipelineOptions, String vcfFileName,
+    static void writeVCF(String vcfFileName,
                          final String fastaReference, final JavaRDD<VariantContext> variantContexts,
                          final Logger logger) {
 
-        final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource(pipelineOptions, fastaReference, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
+        final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource(fastaReference, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
 
         final List<? extends VariantContext> sortedVariantsList = sortVariantsByCoordinate(variantContexts.collect(), referenceSequenceDictionary);
 
@@ -65,9 +63,9 @@ public class SVVCFWriter {
         writeVariants(vcfFileName, sortedVariantsList, referenceSequenceDictionary, getVcfHeader(referenceSequenceDictionary));
     }
 
-    public static void writeVCF(final PipelineOptions pipelineOptions, final String outputFile, final String referencePath,
+    public static void writeVCF(final String outputFile, final String referencePath,
                                 final JavaRDD<SVContext> calls, final VCFHeader header, final Logger logger) {
-        final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource(pipelineOptions, referencePath, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
+        final SAMSequenceDictionary referenceSequenceDictionary = new ReferenceMultiSource(referencePath, ReferenceWindowFunctions.IDENTITY_FUNCTION).getReferenceSequenceDictionary(null);
 
         final List<? extends VariantContext> sortedVariantsList = sortVariantsByCoordinate(calls.collect(), referenceSequenceDictionary);
 
@@ -80,9 +78,9 @@ public class SVVCFWriter {
 
     private static void logNumOfVarByTypes(final List<? extends VariantContext> sortedVariantsList, final Logger logger) {
 
-        logger.info("Discovered a total of " + variants.size() + " records: ");
+        logger.info("Discovered " + sortedVariantsList.size() + " variants.");
 
-        final Map<String, Long> variantsCountByType = variants.stream()
+        final Map<String, Long> variantsCountByType = sortedVariantsList.stream()
                 .collect(Collectors.groupingBy(vc -> (String) vc.getAttribute(GATKSVVCFConstants.SVTYPE), Collectors.counting()));
 
         variantsCountByType.forEach((key, value) -> logger.info("  " + key + ": " + value));
