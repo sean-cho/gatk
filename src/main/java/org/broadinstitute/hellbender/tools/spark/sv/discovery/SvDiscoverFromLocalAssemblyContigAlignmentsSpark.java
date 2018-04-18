@@ -126,11 +126,11 @@ public final class SvDiscoverFromLocalAssemblyContigAlignmentsSpark extends GATK
             fullName = "write-sam", optional = true)
     private boolean writeSAMFiles;
 
-    static final String SIMPLE_CHIMERA_VCF_FILE_NAME = "NonComplex.vcf";
-    static final String COMPLEX_CHIMERA_VCF_FILE_NAME = "Complex.vcf";
-    static final String REINTERPRETED_1_SEG_CALL_VCF_FILE_NAME = "cpx_reinterpreted_simple_1_seg.vcf";
-    static final String REINTERPRETED_MULTI_SEG_CALL_VCF_FILE_NAME = "cpx_reinterpreted_simple_multi_seg.vcf";
-    static final String MERGED_VCF_FILE_NAME = "merged_simple.vcf";
+    public static final String SIMPLE_CHIMERA_VCF_FILE_NAME = "NonComplex.vcf";
+    public static final String COMPLEX_CHIMERA_VCF_FILE_NAME = "Complex.vcf";
+    public static final String REINTERPRETED_1_SEG_CALL_VCF_FILE_NAME = "cpx_reinterpreted_simple_1_seg.vcf";
+    public static final String REINTERPRETED_MULTI_SEG_CALL_VCF_FILE_NAME = "cpx_reinterpreted_simple_multi_seg.vcf";
+    public static final String MERGED_VCF_FILE_NAME = "merged_simple.vcf";
 
     @Override
     public boolean requiresReference() {
