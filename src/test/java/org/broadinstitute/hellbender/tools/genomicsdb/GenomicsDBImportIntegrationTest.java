@@ -134,6 +134,10 @@ public final class GenomicsDBImportIntegrationTest extends CommandLineProgramTes
         testGenomicsDBImporter(LOCAL_GVCFS, MULTIPLE_INTERVALS, COMBINED_MULTI_INTERVAL, b38_reference_20_21, true);
     }
 
+    public void testGenomicsDBImportFileWithSpanDels() throws IOException {
+        testGenomicsDBImporterWithGenotypes(Arrays.asList(NA12878_HG37), INTERVAL_NONDIPLOID, NA12878_HG37, b37_reference_20_21);
+    }
+
     @Test
     public void testGenomicsDBImportFileInputsAgainstCombineGVCF() throws IOException {
         testGenomicsDBAgainstCombineGVCFs(LOCAL_GVCFS, INTERVAL, b38_reference_20_21, new String[0]);
