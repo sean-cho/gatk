@@ -13,7 +13,7 @@ import org.broadinstitute.hellbender.engine.FeatureDataSourceUnitTest;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.test.ArgumentsBuilder;
 import org.broadinstitute.hellbender.utils.test.VariantContextTestUtils;
-import org.seqdoop.hadoop_bam.util.VCFHeaderReader;
+import htsjdk.variant.utils.VCFHeaderReader;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
