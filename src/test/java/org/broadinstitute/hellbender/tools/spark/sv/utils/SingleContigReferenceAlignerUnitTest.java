@@ -26,7 +26,7 @@ import java.util.Random;
 import java.util.stream.Collectors;
 
 /**
- * Unit tests for {@link SingleSequenceReferenceAligner}
+ * Unit tests for {@link SingleSequenceReferenceAligner}.
  */
 public class SingleContigReferenceAlignerUnitTest extends BaseTest {
 
