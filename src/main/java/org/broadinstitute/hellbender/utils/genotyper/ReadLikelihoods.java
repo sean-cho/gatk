@@ -8,6 +8,11 @@ import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import org.apache.commons.collections.ListUtils;
 import org.apache.commons.math3.stat.descriptive.rank.Median;
+import org.broadinstitute.hellbender.tools.spark.sv.InsertSizeDistribution;
+import org.broadinstitute.hellbender.tools.spark.sv.SVContig;
+import org.broadinstitute.hellbender.tools.spark.sv.Template;
+import org.broadinstitute.hellbender.tools.spark.sv.TemplateMappingInformation;
+import org.broadinstitute.hellbender.tools.spark.sv.utils.SVHaplotype;
 import org.broadinstitute.hellbender.utils.IndexRange;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -1071,6 +1076,30 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
         } else {
             return -1;
         }
+    }
+
+    public String toString() {
+        final StringBuilder builder = new StringBuilder(1000);
+        builder.append("template");
+        for (final A allele : alleles()) {
+            builder.append('\t').append(allele.getDisplayString());
+        }
+        for (int s = 0; s < numberOfSamples(); s++) {
+            for (final GATKRead read : readsBySampleIndex[s]) {
+                final int templateIndex = readIndex(s, read);
+                builder.append('\n').append(read.getName());
+                final BestAllele best = searchBestAllele(s, templateIndex, true);
+                builder.append('\t').append(best.allele.getDisplayString())
+                        .append('\t').append(String.format("%.2f", best.confidence));
+
+                for (final A allele : alleles()) {
+                    final int haplotypeIndex = alleleList.indexOf(allele);
+                    builder.append('\t')
+                            .append(String.format("%.2f", valuesBySampleIndex[s][haplotypeIndex][templateIndex]));
+                }
+            }
+        }
+        return builder.toString();
     }
 
     /**

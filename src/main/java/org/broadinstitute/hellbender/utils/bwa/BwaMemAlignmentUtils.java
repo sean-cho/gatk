@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
  * Utils to move data from a BwaMemAlignment into a GATKRead, or into a SAM tag.
  */
 public class BwaMemAlignmentUtils {
+
     /**
      * Builds a SAMRecord from unaligned read data and an alignment.
      * qualsArg can be null.

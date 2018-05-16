@@ -61,6 +61,14 @@ public final class GenotypeLikelihoodCalculator {
      */
     private final PriorityQueue<Integer> alleleHeap;
 
+
+    private double[] relativeAlleleFrequency;
+
+    public void setRelativeAlleleFrequency(final double[] value) {
+        relativeAlleleFrequency = value;
+    }
+
+
     /**
      * Cache of the last genotype-allele-count requested using {@link #genotypeAlleleCountsAt(int)}, when it
      * goes beyond the maximum genotype-allele-count static capacity. Check on that method documentation for details.
@@ -378,10 +386,21 @@ public final class GenotypeLikelihoodCalculator {
         final int freq1 = ploidy - freq0; // no need to get it from genotypeAlleleCounts.
         int allele0LnLkOffset = readCount * ((ploidy + 1) * allele0 + freq0);
         int allele1LnLkOffset = readCount * ((ploidy + 1) * allele1 + freq1);
-        for (int r = 0; r < readCount; r++) {
-            final double lnLk0 = readLikelihoodComponentsByAlleleCount[allele0LnLkOffset++];
-            final double lnLk1 = readLikelihoodComponentsByAlleleCount[allele1LnLkOffset++];
-            likelihoodByRead[r] = MathUtils.approximateLog10SumLog10(lnLk0, lnLk1);
+        if (relativeAlleleFrequency == null || relativeAlleleFrequency.length < 2) {
+            for (int r = 0; r < readCount; r++) {
+                final double lnLk0 = readLikelihoodComponentsByAlleleCount[allele0LnLkOffset++];
+                final double lnLk1 = readLikelihoodComponentsByAlleleCount[allele1LnLkOffset++];
+                likelihoodByRead[r] = MathUtils.approximateLog10SumLog10(lnLk0, lnLk1);
+            }
+        } else {
+            final double relSum = relativeAlleleFrequency[0] + relativeAlleleFrequency[1];
+            final double rel0 = Math.log10(relSum == 0 ? 1 : relativeAlleleFrequency[0] / relSum) + Math.log10(ploidy);
+            final double rel1 = Math.log10(relSum == 0 ? 1 : relativeAlleleFrequency[1] / relSum) + Math.log10(ploidy);
+            for (int r = 0; r < readCount; r++) {
+                final double lnLk0 = readLikelihoodComponentsByAlleleCount[allele0LnLkOffset++];
+                final double lnLk1 = readLikelihoodComponentsByAlleleCount[allele1LnLkOffset++];
+                likelihoodByRead[r] = MathUtils.approximateLog10SumLog10(lnLk0 + rel0, lnLk1 + rel1);
+            }
         }
     }
 

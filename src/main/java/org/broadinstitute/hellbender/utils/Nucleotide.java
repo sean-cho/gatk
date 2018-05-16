@@ -30,20 +30,21 @@ public enum Nucleotide {
     H(true, true, false, true),
     V(true, true, true, false),
     N(true, true, true, true),
-    INVALID(false, false, false, false);
+    X(false, false, false, false);
 
     public static final Nucleotide U = T;
-    public static final Nucleotide X = N;
+    public static final Nucleotide INVALID = X;
 
     public static final List<Nucleotide> REGULAR_BASES = Arrays.asList(A, C, G, T);
 
-    private static final Nucleotide[] baseToValue = new Nucleotide[Byte.MAX_VALUE + 1];
+    private static final Nucleotide[] baseToValue = new Nucleotide[1 << Byte.SIZE];
     private static final Nucleotide[] maskToValue = new Nucleotide[1 << 4];
+    private static final byte INVALID_ENCODING = 'X';
 
     private static final Nucleotide[] reverseComplement = new Nucleotide[Byte.MAX_VALUE];
 
     static {
-        Arrays.fill(baseToValue, INVALID);
+        Arrays.fill(baseToValue, X);
         for (final Nucleotide nucleotide : values()) {
             baseToValue[nucleotide.lowerCaseByteEncoding] = baseToValue[nucleotide.upperCaseByteEncoding] = nucleotide;
             maskToValue[nucleotide.acgtMask] = nucleotide;
@@ -83,8 +84,8 @@ public enum Nucleotide {
     Nucleotide(final boolean a, final boolean c, final boolean g, final boolean t) {
         acgtMask = (a ? A_MASK : 0) | (c ? C_MASK : 0) | (g ? G_MASK : 0) | (t ? T_MASK : 0);
         isConcrete = acgtMask == A_MASK || acgtMask == C_MASK || acgtMask == G_MASK || acgtMask == T_MASK;
-        lowerCaseByteEncoding = acgtMask == 0 ? (byte) 0 : (byte) Character.toLowerCase(name().charAt(0));
-        upperCaseByteEncoding = acgtMask == 0 ? (byte) 0 : (byte) Character.toUpperCase(name().charAt(0));
+        lowerCaseByteEncoding = (byte) Character.toLowerCase(name().charAt(0));
+        upperCaseByteEncoding = (byte) Character.toUpperCase(name().charAt(0));
     }
 
     /**
@@ -120,10 +121,6 @@ public enum Nucleotide {
         return baseToValue[Utils.validIndex(base, baseToValue.length)];
     }
 
-    public static Nucleotide complement(final byte base){
-        return reverseComplement[Utils.validIndex(base, reverseComplement.length)];
-    }
-
     /**
      * Checks whether the nucleotide refer to a concrete (rather than ambiguous) base.
      * @return {@code true} iff this is a concrete nucleotide.
@@ -146,6 +143,49 @@ public enum Nucleotide {
             return false;
         } else {
             return ((this.acgtMask & other.acgtMask) == other.acgtMask);
+        }
+    }
+
+    /**
+     * Checks whether to base encodings make reference to the same {@link #Nucleotide}
+     *  instance regardless of their case.
+     * <p>
+     *     This method is a shorthard for:
+     *     <pre>{@link #decode}(a){@link #same(Nucleotide) same}({@link #decode}(b)) </pre>.
+     * </p>
+     *
+     *  <p>
+     *      The order of the inputs is not relevant, therefore {@code same(a, b) == same(b, a)} for any
+     *      given {@code a} and {@code b}.
+     *  </p>
+     *  <p>
+     *      Notice that if either or both input bases make reference to an invalid nucleotide (i.e. <pre> {@link #decode}(x) == {@link #INVALID}},
+     *      this method will return {@code false} even if {@code a == b}.
+     *  </p>
+     * @param a the first base to compare (however order is not relevant).
+     * @param b the second base to compare (however order is not relevant).
+     * @return {@code true} iff {@code {@link #decode}}.same({@link #decode}(b))}}
+     */
+    public static boolean same(final byte a, final byte b) {
+        return baseToValue[a] == baseToValue[b] && baseToValue[a] != INVALID;
+    }
+
+    /**
+     * Checks whether this and another {@link #Nucleotide} make reference to the same nucleotide(s).
+     * <p>
+     *     In contrast with {@link #equals}, this method will return {@code false} if any of the two, this
+     *     or the input nucleotide is the {@link #INVALID} enum value. So even <pre>{@link #INVALID}.same({@link #INVALID})</pre>
+     *     will return {@code null}.
+     * </p>
+     *
+     * @param other the other nucleotide.
+     * @return {@code true} iff this and the input nucleotide make reference to the same nucleotides.
+     */
+    public boolean same(final Nucleotide other) {
+        if (this == INVALID || other == INVALID) {
+            return false;
+        } else {
+            return this == other;
         }
     }
 
@@ -178,6 +218,53 @@ public enum Nucleotide {
             default:
                 return false;
         }
+    }
+
+    /**
+     * Returns the complement nucleotide code for this one.
+     * <p>
+     *     For ambiguous nucleotide codes, this will return the ambiguous code that encloses the complement of
+     *     each possible nucleotide in this code.
+     * </p>
+     * <p>
+     *     The complement of the {@link #INVALID} nucleotide its itself.
+     * </p>
+     * @return never {@code null}.
+     */
+    public Nucleotide complement() {
+        switch (this) {
+            case A: return T;
+            case C: return G;
+            case G: return C;
+            case T: return A;
+            case X:
+            case N:
+            case S:
+            case W:
+                    return this;
+            case R: return Y;
+            case Y: return R;
+            case M: return K;
+            case K: return M;
+            case H: return D;
+            case D: return H;
+            case B: return V;
+            case V: return B;
+            default:
+                throw new IllegalArgumentException("unsupported value " + this);
+        }
+    }
+
+    /**
+     * Returns the complement for a base code
+     * @param b
+     * @return
+     */
+    public static byte complement(final byte b) {
+
+        final Nucleotide value = decode(b);
+        final Nucleotide compl = value.complement();
+        return compl.encodeAsByte(Character.isLowerCase(b));
     }
 
     /**
@@ -246,6 +333,89 @@ public enum Nucleotide {
 
         public long sum() {
             return LongStream.of(counts).sum();
+        }
+    }
+
+    public Nucleotide transition() {
+        switch(this) {
+            case A:
+                return G;
+            case G:
+                return A;
+            case C:
+                return T;
+            case T:
+                return C;
+            case X:
+            case N:
+            case R:
+            case Y:
+                return this;
+            case S:
+                return W;
+            case W:
+                return S;
+            case M:
+                return K;
+            case K:
+                return M;
+            case B:
+                return H;
+            case H:
+                return B;
+            case D:
+                return V;
+            case V:
+                return D;
+            default:
+                throw new IllegalStateException("unexpected nucleotide " + this);
+        }
+    }
+
+    public Nucleotide transversion() {
+        switch (this) {
+            case A:
+            case G:
+                return Y;
+            case C:
+            case T:
+                return R;
+            case N:
+            case X:
+                return this;
+            case Y:
+                return R;
+            case R:
+                return Y;
+            default: // any other ambiguous will include all possible bases.
+                return N;
+        }
+    }
+
+    /**
+     * Transvertion mutation toward a strong or a weak base.
+     * <p>
+     *     This method provides a non-ambiguous alternative to {@link #transversion()} for
+     *     concrete nucleotides.
+     * </p>
+     *
+     * @param toStrong whether the result should be a strong ({@code S: G, C}) or weak ({@code W: A, T}) nucleotide(s).
+     * @return nucleotides that may emerged from such a transversion.
+     */
+    public Nucleotide transversion(final boolean toStrong) {
+        switch (this) {
+            case A:
+            case G:
+            case R:
+                return toStrong ? C : T;
+            case C:
+            case T:
+            case Y:
+                return toStrong ? G : A;
+            case X:
+                return this;
+            default:
+                return toStrong ? S : W;
         }
     }
 }

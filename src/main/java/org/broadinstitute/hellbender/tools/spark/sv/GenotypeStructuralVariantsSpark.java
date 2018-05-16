@@ -13,6 +13,7 @@ import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.GenotypeBuilder;
 import htsjdk.variant.variantcontext.GenotypeLikelihoods;
+import htsjdk.variant.variantcontext.StructuralVariantType;
 import htsjdk.variant.variantcontext.VariantContextBuilder;
 import htsjdk.variant.vcf.VCFConstants;
 import htsjdk.variant.vcf.VCFFormatHeaderLine;
@@ -105,6 +106,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     private static final long serialVersionUID = 1L;
     
     private final boolean ignoreReadsThatDontOverlapBreakingPoint = true;
+
+    private final boolean ignoreTemplatesThatDontOverlapBreakingPoint = true;
 
     @ArgumentCollection
     private RequiredVariantInputArgumentCollection variantArguments = new RequiredVariantInputArgumentCollection();
@@ -402,6 +405,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         final SerializableBiFunction<String, byte[], File> imageCreator =  GenotypeStructuralVariantsSpark::createTransientImageFile;
         final AlignmentPenalties penalties = this.penalties;
         final boolean ignoreReadsThatDontOverlapBreakingPoint = this.ignoreReadsThatDontOverlapBreakingPoint;
+        final boolean ignoreTemplateThatDontOverlapBreakingPoint = this.ignoreTemplatesThatDontOverlapBreakingPoint;
         final double informativeTemplateDifferencePhred = this.informativeTemplateDifferencePhred;
         final InsertSizeDistribution insertSizeDistribution = this.insertSizeDistribution;
         return input.mapPartitions(it -> {
@@ -415,14 +419,26 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     new GenotypeLikelihoodCalculators().getInstance(2, 2);
 
             return variants
+                    .sequential()
                     .filter(variant -> !Utils.isEmpty(variant._2()._1()))
                     .map(variant -> {
                 final List<Template> allTemplates = Utils.stream(variant._2()._2())
                         .collect(Collectors.toList());
                 final List<int[]> allMapQuals = Utils.stream(variant._2()._3())
                         .collect(Collectors.toList());
+                    if (variant._1().isInsertion()) {
+                        final int length = variant._1().getStructuralVariantLength();
+                        final double insertAverageSize = insertSizeDistribution.average();
+                        genotypeCalculator.setRelativeAlleleFrequency(new double[] { insertAverageSize, Math.min (2 * insertAverageSize, insertAverageSize + length) });
+                    } else if (variant._1().isDeletion()) {
+                        final double insertAverageSize = insertSizeDistribution.average();
+                        final int length = variant._1().getStructuralVariantLength();
+                        genotypeCalculator.setRelativeAlleleFrequency(new double[] { Math.min( insertAverageSize * 2, insertAverageSize + length), insertAverageSize });
+                    } else {
+                        genotypeCalculator.setRelativeAlleleFrequency(null); //reset to default uniform.
+                    }
 
-                final List<Template> allInformativeTemplates = new ArrayList<>(allTemplates.size());
+                        final List<Template> allInformativeTemplates = new ArrayList<>(allTemplates.size());
                 final List<int[]> allInformativeMapQuals = new ArrayList<>(allTemplates.size());
                 for (int i = 0; i < allTemplates.size(); i++) {
                     for (final int mq : allMapQuals.get(i)) {
@@ -486,13 +502,15 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     final SVHaplotype haplotype = haplotypes.get(h);
 
                     final boolean isContig = haplotype.isNeitherReferenceNorAlternative();
+
                     final String imageName = isContig
                             ? haplotype.getName()
-                            : haplotype.getVariantId() + "/" + haplotype.getName();
+                            : variant._1().getUniqueID() + "/" + haplotype.getName();
                     final File imageFile =
                             imagesByName.computeIfAbsent(imageName, (in) -> imageCreator.apply(in, haplotype.getBases()));
                     final BwaMemIndex index = BwaMemIndexCache.getInstance(imageFile.toString());
                     final BwaMemAligner aligner = new BwaMemAligner(index);
+                    aligner.alignPairs();
                     final List<List<BwaMemAlignment>> alignments = aligner.alignSeqs(sequences);
                     final IntFunction<String> haplotypeName = i -> i == 0 ? haplotype.getName() : null;
                     for (int i = 0; i < templates.size(); i++) {
@@ -502,9 +520,9 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         final List<AlignmentInterval> firstIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(firstAlignment, haplotypeName, template.fragments().get(0).length());
                         final List<AlignmentInterval> secondIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(secondAlignment, haplotypeName, template.fragments().get(1).length());
 
-                        final TemplateMappingInformation mappingInformation = TemplateMappingInformation.fromAlignments(
-                                firstIntervals, template.fragments().get(0).length(),
-                                secondIntervals, template.fragments().get(1).length());
+                        final TemplateMappingInformation mappingInformation = TemplateMappingInformation.fromAlignments(haplotype,
+                                template.fragments().get(0).bases(), firstIntervals,
+                                template.fragments().get(1).bases(), secondIntervals);
                         scoreTable.setMappingInfo(h, i, mappingInformation);
                     }
                 }
@@ -591,28 +609,28 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     haplotypeAltScore -= base;
                     haplotypeRefScore -= base;
                     if (haplotypeAltScore < haplotypeRefScore) {
-                        haplotypeAltScore = Math.min(haplotypeRefScore, haplotypeRefScore - 0.1 * maxMQ);
+                        haplotypeAltScore = Math.max(haplotypeAltScore, haplotypeRefScore - 0.1 * maxMQ);
                     } else {
-                        haplotypeRefScore = Math.min(haplotypeRefScore, haplotypeAltScore - 0.1 * maxMQ);
+                        haplotypeRefScore = Math.max(haplotypeRefScore, haplotypeAltScore - 0.1 * maxMQ);
                     }
                     for (int t = 0; t < templates.size(); t++) {
                         final boolean noAlignment = !scoreTable.getMappingInfo(mappingInfoIndex, t).firstAlignmentScore.isPresent()
                                 && !scoreTable.getMappingInfo(mappingInfoIndex, t).secondAlignmentScore.isPresent();
-                        if (noAlignment || true) continue;
-                        final double firstMappingScore = scoreTable.getMappingInfo(mappingInfoIndex, t).firstAlignmentScore.orElse(0.0);
-                        final double secondMappingScore = scoreTable.getMappingInfo(mappingInfoIndex, t).secondAlignmentScore.orElse(0.0);
-                       if (firstMappingScore == scoreTable.bestMappingScorePerFragment[t][0]) {
+                        if (noAlignment) continue;
+                        final double firstMappingScore = scoreTable.getMappingInfo(mappingInfoIndex, t).firstAlignmentScore.orElse(Double.NEGATIVE_INFINITY);
+                        final double secondMappingScore = scoreTable.getMappingInfo(mappingInfoIndex, t).secondAlignmentScore.orElse(Double.NEGATIVE_INFINITY);
+       //                 if (firstMappingScore == scoreTable.bestMappingScorePerFragment[t][0]) {
                             sampleLikelihoodsFirst.set(refIdx, t,
                                     Math.max(firstMappingScore + haplotypeRefScore, sampleLikelihoodsFirst.get(refIdx, t)));
                             sampleLikelihoodsFirst.set(altIdx, t,
                                     Math.max(firstMappingScore + haplotypeAltScore, sampleLikelihoodsFirst.get(altIdx, t)));
-                       }
-                        if (secondMappingScore == scoreTable.bestMappingScorePerFragment[t][1]) {
+       //                 }
+       //                 if (secondMappingScore == scoreTable.bestMappingScorePerFragment[t][1]) {
                             sampleLikelihoodsSecond.set(refIdx, t,
                                     Math.max(secondMappingScore + haplotypeRefScore, sampleLikelihoodsSecond.get(refIdx, t)));
                             sampleLikelihoodsSecond.set(altIdx, t,
                                     Math.max(secondMappingScore + haplotypeAltScore, sampleLikelihoodsSecond.get(altIdx, t)));
-                       }
+       //                 }
                     }
                 }
                 for (int t = 0; t < templates.size(); t++) {
@@ -622,24 +640,21 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         final double base = Math.max(matrix.get(refIdx, t), matrix.get(altIdx, t));
                         final int maxIndex = matrix.get(refIdx, t) == base ? refIdx : altIdx;
                         final int minIndex = maxIndex == refIdx ? altIdx : refIdx;
-    //                    matrix.set(minIndex, t, Math.max(matrix.get(maxIndex, t) - 0.1 * maxMq, matrix.get(minIndex, t)));
-                       //         Math.min(matrix.get(maxIndex, t), matrix.get(minIndex, t) - base)));
-                    //    matrix.set(minIndex, t,  Math.min(matrix.get(maxIndex, t), matrix.get(minIndex, t) - base));
+                        matrix.set(minIndex, t, Math.max(matrix.get(maxIndex, t) - 0.1 * maxMq, matrix.get(minIndex, t)));
+                        //      Math.min(matrix.get(maxIndex, t), matrix.get(minIndex, t) - base);
+                        //matrix.set(minIndex, t,  Math.min(matrix.get(maxIndex, t), matrix.get(minIndex, t) - base));
                     }
                 }
                 final boolean[] dpRelevant = new boolean[sampleLikelihoods.numberOfReads()];
 
                 for (int j = 0; j < sampleLikelihoods.numberOfReads(); j++) {
-                    final boolean considerFirstFragment;
-                    final boolean considerSecondFragment;
+                    boolean considerFirstFragment = true;
+                    boolean considerSecondFragment = true;
                     if (ignoreReadsThatDontOverlapBreakingPoint) {
                         considerFirstFragment = scoreTable.getMappingInfo(refHaplotypeIndex, j).crossesBreakPoint(refBreakPoints)
                                 || scoreTable.getMappingInfo(altHaplotypeIndex, j).crossesBreakPoint(altBreakPoints);
                         considerSecondFragment = scoreTable.getMappingInfo(refHaplotypeIndex, j).crossesBreakPoint(refBreakPoints)
                                 || scoreTable.getMappingInfo(altHaplotypeIndex, j).crossesBreakPoint(altBreakPoints);
-                    } else {
-                        considerFirstFragment = true;
-                        considerSecondFragment = true;
                     }
                     for (int k = 0; k < 2; k++) {
                         final LikelihoodMatrix<GenotypingAllele> matrix = k == 0 ? sampleLikelihoodsFirst : sampleLikelihoodsSecond;
@@ -690,9 +705,9 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                             sampleLikelihoods.set(altIdx, t, sampleLikelihoods.get(altIdx, t) + altInsertSizeLog10Prob);
                         }
                     } else if (refMapping.pairOrientation.isProper()) {
-              //          sampleLikelihoods.set(altIdx, t, sampleLikelihoods.get(altIdx, t) - 0.1 * penalties.improperPairPenalty);
+                          sampleLikelihoods.set(altIdx, t, sampleLikelihoods.get(altIdx, t) - 0.1 * penalties.improperPairPenalty);
                     } else {
-              //          sampleLikelihoods.set(refIdx, t, sampleLikelihoods.get(refIdx, t) - 0.1 * penalties.improperPairPenalty);
+                          sampleLikelihoods.set(refIdx, t, sampleLikelihoods.get(refIdx, t) - 0.1 * penalties.improperPairPenalty);
                     }
                 }
                 int minRefPos = ref.getLength();

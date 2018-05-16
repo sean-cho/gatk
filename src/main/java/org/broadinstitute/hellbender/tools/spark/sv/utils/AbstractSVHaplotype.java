@@ -94,11 +94,6 @@ public abstract class AbstractSVHaplotype implements SVHaplotype {
         unsafeCopyBases(offset, whereTo, destOffset, length);
     }
 
-    @Override
-    public int insertSize(final int start, final int end) {
-        return end - start + 1;
-    }
-
     public static class Serializer<S extends AbstractSVHaplotype> extends com.esotericsoftware.kryo.Serializer<S> {
 
         @Override

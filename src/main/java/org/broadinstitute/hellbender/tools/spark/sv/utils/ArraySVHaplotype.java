@@ -4,19 +4,13 @@ import com.esotericsoftware.kryo.DefaultSerializer;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import htsjdk.samtools.SAMFlag;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignmentInterval;
 import org.broadinstitute.hellbender.utils.Nucleotide;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.bwa.BwaMemAligner;
-import org.broadinstitute.hellbender.utils.bwa.BwaMemAlignment;
-import org.broadinstitute.hellbender.utils.bwa.BwaMemIndex;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
-import org.broadinstitute.hellbender.utils.reference.FastaReferenceWriter;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -83,13 +77,14 @@ public class ArraySVHaplotype extends AbstractSVHaplotype {
     }
 
     public <T> List<List<AlignmentInterval>> align(final Iterable<T> input, Function<T, byte[]> basesOf) {
-        try (final SingleReferenceSequenceAligner aligner = new SingleReferenceSequenceAligner(name, bases)) {
+        try (final SingleContigReferenceAligner aligner = new SingleContigReferenceAligner(name, bases)) {
             final List<byte[]> seqs = Utils.stream(input).map(basesOf).collect(Collectors.toList());
             return aligner.align(seqs);
         } catch (final IOException ex) {
             throw new GATKException("could not create aligner", ex);
         }
     }
+
 
     public static class Serializer<S extends ArraySVHaplotype> extends AbstractSVHaplotype.Serializer<S> {
 
@@ -112,52 +107,4 @@ public class ArraySVHaplotype extends AbstractSVHaplotype {
         }
     }
 
-    private static class SingleReferenceSequenceAligner implements AutoCloseable {
-
-        private final File fasta;
-        private final File image;
-        private final BwaMemAligner aligner;
-        private final BwaMemIndex index;
-        private final String name;
-
-        public SingleReferenceSequenceAligner(final String name, final byte[] bases) {
-            try {
-                this.name = name;
-                fasta = File.createTempFile("ssvh-temp", ".fasta");
-                fasta.deleteOnExit();
-                image = new File(fasta.getParentFile(), fasta.getName().replace(".fasta", ".img"));
-                image.deleteOnExit();
-                FastaReferenceWriter.writeSingleSequenceReference(fasta.toPath(), false, false, name, null, bases);
-                BwaMemIndex.createIndexImageFromFastaFile(fasta.toString(), image.toString());
-                index = new BwaMemIndex(image.toString());
-                aligner = new BwaMemAligner(index);
-            } catch (final IOException ex) {
-                throw new GATKException("could not create index files", ex);
-            }
-        }
-
-        public final List<List<AlignmentInterval>> align(final List<byte[]> seqs) {
-            final List<List<BwaMemAlignment>> alignments = aligner.alignSeqs(seqs);
-            final List<List<AlignmentInterval>> result = new ArrayList<>(alignments.size());
-            final List<String> refNames = Collections.singletonList(name);
-            for (int i = 0; i < alignments.size(); i++) {
-                final int queryLength = seqs.get(i).length;
-                final List<AlignmentInterval> intervals = alignments.get(i).stream()
-                        .filter(bwa -> bwa.getRefId() >= 0)
-                        .filter(bwa -> SAMFlag.SECONDARY_ALIGNMENT.isUnset(bwa.getSamFlag()))
-                        .map(bma -> new AlignmentInterval(bma, refNames, queryLength))
-                        .collect(Collectors.toList()); // ignore secondary alignments.
-                result.add(intervals);
-            }
-            return result;
-        }
-
-        @Override
-        public void close() throws IOException {
-            aligner.close();
-            index.close();
-            image.delete();
-            fasta.delete();
-        }
-    }
 }

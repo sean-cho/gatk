@@ -735,4 +735,26 @@ public final class SVContext extends VariantContext {
             return null;
         }
     }
+
+    public boolean isDeletion() {
+        switch (getStructuralVariantType()) {
+            case DEL: return true;
+            case DUP:
+                final int[] numbers = getDuplicationNumbers();
+                return numbers.length >= 2 && numbers[1] < numbers[0];
+            default:
+                return false;
+        }
+    }
+
+    public boolean isInsertion() {
+        switch (getStructuralVariantType()) {
+            case INS: return true;
+            case DUP:
+                final int[] numbers = getDuplicationNumbers();
+                return numbers.length >= 2 && numbers[1] > numbers[0];
+            default:
+                return false;
+        }
+    }
 }

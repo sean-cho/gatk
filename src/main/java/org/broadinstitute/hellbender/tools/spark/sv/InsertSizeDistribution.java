@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
+import org.apache.commons.math3.distribution.LogNormalDistribution;
 import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.commons.math3.distribution.RealDistribution;
 import org.broadinstitute.hellbender.exceptions.UserException;
@@ -17,9 +18,15 @@ public class InsertSizeDistribution implements Serializable {
 
     public static final String MEAN_DISTR_PARAM_NAME = "mean";
     public static final String SD_DISTR_PARAM_NAME = "sd";
+    public static final String SHAPE_DISTR_PARAM_NAME = "shape";
+    public static final String SCALE_DISTR_PARAM_NAME = "scale";
 
     private static Pattern NORMAL_DISTR_PATTERN = Pattern.compile(
             String.format("^N(?:orm(?:al)?)?\\(\\s*(?<%s>\\S+)\\s*,\\s*(?<%s>\\S+)\\s*\\)",MEAN_DISTR_PARAM_NAME, SD_DISTR_PARAM_NAME));
+
+    private static Pattern LOG_NORMAL_DISTR_PATTERN = Pattern.compile(
+            String.format("^(?:(?:ln)|(?:log))N(?:orm(?:al)?)?\\(\\s*(?<%s>\\S+)\\s*,\\s*(?<%s>\\S+)\\s*\\)",SCALE_DISTR_PARAM_NAME, SHAPE_DISTR_PARAM_NAME));
+
 
     private final String description;
 
@@ -28,6 +35,10 @@ public class InsertSizeDistribution implements Serializable {
     private RealDistribution dist() {
         initializeDistribution();
         return dist;
+    }
+
+    public double average() {
+        return dist().getNumericalMean();
     }
 
     public int quantile(final double prob) {
@@ -48,7 +59,10 @@ public class InsertSizeDistribution implements Serializable {
         if (dist == null) {
             if (description.matches(NORMAL_DISTR_PATTERN.pattern())) {
                 dist = parseNormalDistribution(description);
-            } else {
+            } else if (description.matches(LOG_NORMAL_DISTR_PATTERN.pattern())) {
+                dist = parseLogNormalDistribution(description);
+            }
+            else {
                 throw new IllegalArgumentException("unsupported insert size distribution description: " + description);
             }
         }
@@ -67,6 +81,22 @@ public class InsertSizeDistribution implements Serializable {
             throw new UserException.BadInput(String.format("bad insert distribution std. dev. value must be a strictly positive finite but you provided: %d", sd));
         } else {
             return new NormalDistribution(mean, sd);
+        }
+    }
+
+    private static RealDistribution parseLogNormalDistribution(final String distrString) {
+        final Matcher matcher = LOG_NORMAL_DISTR_PATTERN.matcher(distrString);
+        if (!matcher.find()) {
+            throw new IllegalArgumentException("bad description: " + distrString);
+        }
+        final double scale = Double.parseDouble(matcher.group(SCALE_DISTR_PARAM_NAME));
+        final double shape = Double.parseDouble(matcher.group(SHAPE_DISTR_PARAM_NAME));
+        if (!Double.isFinite(scale)) {
+            throw new UserException.BadInput(String.format("bad insert distribution mean value, must be a finite double but you provided: %d",  scale));
+        } else if (!Double.isFinite(shape) || shape <= 0) {
+            throw new UserException.BadInput(String.format("bad insert distribution std. dev. value must be a strictly positive finite but you provided: %d", shape));
+        } else {
+            return new LogNormalDistribution(scale, shape);
         }
     }
 

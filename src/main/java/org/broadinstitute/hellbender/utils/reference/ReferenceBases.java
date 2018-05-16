@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.utils.reference;
 
 import htsjdk.samtools.util.SequenceUtil;
 import org.broadinstitute.hellbender.exceptions.GATKException;
+import org.broadinstitute.hellbender.utils.Nucleotide;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
@@ -85,6 +86,29 @@ public final class ReferenceBases implements Serializable {
         Utils.validateArg(end <= intervalEnd, "the end of the subset must be within this reference bases interval");
         Utils.validateArg(start <= end, "the start must be less or equal to the end");
         return Arrays.copyOfRange(bases, start - intervalStart, bases.length  + end - intervalEnd);
+    }
+
+    public StringBuilder appendBasesTo(final StringBuilder builder, final int start, final int end) {
+        Utils.nonNull(builder);
+        final int intervalStart = interval.getStart();
+        final int intervalEnd = interval.getEnd();
+        Utils.validateArg(start >= intervalStart, "the start of the subset must be within this reference bases interval");
+        Utils.validateArg(end <= intervalEnd, "the end of the subset must be within this reference bases interval");
+
+        final int firstIndex = start - intervalStart;
+        final int lastIndex = end - intervalStart;
+        for (int i = firstIndex; i <= lastIndex; ++i) {
+            builder.append((char) bases[i]);
+        }
+        return builder;
+    }
+
+    public String toBaseString(final int start, final int end) {
+        return appendBasesTo(new StringBuilder(Math.min(0, end - start)), start, end).toString();
+    }
+
+    public String toBaseString() {
+        return toBaseString(getInterval().getStart(), getInterval().getEnd());
     }
 
     /**

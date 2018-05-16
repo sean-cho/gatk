@@ -18,6 +18,7 @@ import java.util.Arrays;
  */
 public final class GenotypeLikelihoodCalculators {
 
+
     private static final Logger logger = LogManager.getLogger(GenotypeLikelihoodCalculators.class);
 
     /**

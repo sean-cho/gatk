@@ -502,6 +502,44 @@ public final class CigarUtils {
         }
     }
 
+    public static int countRightSoftClippedBases(final Cigar cigar) {
+        Utils.nonNull(cigar, "the input cigar cannot be null");
+        final List<CigarElement> elements = cigar.getCigarElements();
+        final int elementsCount = elements.size();
+        if (elementsCount < 2) {  // a single clipped element (that is already an "invalid" CIGAR) would be considered
+            return 0;        // a left-clip so it must have at least two elements before right clipping can be larger than 0.
+        } else {
+            int result = 0;
+            int i;
+            for (i = elementsCount - 1; i >= 0; --i) {
+                final CigarElement ce = elements.get(i);
+                if (!ce.getOperator().isClipping()) {
+                    return result;
+                } else {
+                    result += ce.getOperator() == CigarOperator.S ? ce.getLength() : 0;
+                }
+            }
+            throw new IllegalArgumentException("the input cigar only have clipping operations");
+        }
+    }
+
+
+    public static int countLeftSoftClippedBases(final Cigar cigar) {
+        Utils.nonNull(cigar, "the input cigar cannot not be null");
+        if (cigar.numCigarElements() < 2) {
+            return 0;
+        } else {
+            int result = 0;
+            for (final CigarElement e : cigar) {
+                if (!e.getOperator().isClipping()) {
+                    return result;
+                }
+                result += e.getOperator() == CigarOperator.S ? e.getLength() : 0;
+            }
+            throw new IllegalArgumentException("the input cigar only contains clips!");
+        }
+    }
+
     /**
      * Returns the number of based hard-clipped to the left/head of the cigar.
      *

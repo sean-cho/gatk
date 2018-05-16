@@ -81,7 +81,7 @@ public class TemplateHaplotypeScoreTable implements Serializable {
         return result;
     }
 
-    public double get(final Haplotype allele, final Template template) {
+    public double get(final SVHaplotype allele, final Template template) {
         return get(indexOf(allele), indexOf(template));
     }
 
@@ -90,7 +90,7 @@ public class TemplateHaplotypeScoreTable implements Serializable {
         return templateIndex.getOrDefault(template.name(), -1);
     }
 
-    public int indexOf(final Haplotype allele) {
+    public int indexOf(final SVHaplotype allele) {
         Utils.nonNull(allele);
         int i = 0;
         while (i < haplotypes.size()) {
@@ -142,17 +142,17 @@ public class TemplateHaplotypeScoreTable implements Serializable {
         return haplotypes;
     }
 
-    public String toString() {
-        final StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < numberOfHaplotypes(); i++) {
-            sb.append(Arrays.toString(values[i]));
-            sb.append(", ");
-        }
-        if (sb.length() > 0) {
-            sb.setLength(sb.length() - 1);
-        }
-        return sb.toString();
-    }
+   // public String toString() {
+   //     final StringBuilder sb = new StringBuilder();
+   //     for (int i = 0; i < numberOfHaplotypes(); i++) {
+   //         sb.append(Arrays.toString(values[i]));
+   //         sb.append(", ");
+   //     }
+   //     if (sb.length() > 0) {
+   //         sb.setLength(sb.length() - 1);
+   //     }
+   //     return sb.toString();
+   // }
 
     public int[] informativeTemplateIndexes() {
         return IntStream.range(0, templates.size())
@@ -248,5 +248,47 @@ public class TemplateHaplotypeScoreTable implements Serializable {
             else if ( fragment == 1 && !getMappingInfo(h, template).secondAlignmentScore.isPresent())
                 getMappingInfo(h, template).secondAlignmentScore = score;
         }
+    }
+
+    public String toString(final InsertSizeDistribution distr, final int[] refBreakPoints, final int[] altBreakPoints, final Set<String> filterDown) {
+        final StringBuilder builder = new StringBuilder((400 * templates.size()) + 20 * (templates.size() * haplotypes().size()));
+        builder.append("template");
+        for (final SVHaplotype haplotype : haplotypes()) {
+            builder.append('\t').append(haplotype.getName());
+            if (haplotype.isContig()) {
+                final SVContig contig = (SVContig) haplotype;
+                final double refScore = contig.getReferenceScore();
+                final double altScore = contig.getAlternativeScore();
+                final String call = refScore < altScore ? "alt" : ((altScore < refScore) ? "ref" : ".");
+                final double qual = call.equals("alt") ? (altScore - refScore) : (call.equals("ref") ? refScore - altScore : Double.NaN);
+                builder.append(':').append(call).append(Double.isNaN(qual) ? "" : String.format(":%.2f", qual));
+            }
+        }
+        for (final Template template : templates) {
+            final int templateIndex = indexOf(template);
+            if (filterDown != null) {
+                if (!filterDown.contains(template.name())) {
+                    continue;
+                }
+            }
+            builder.append('\n').append(template.name());
+            for (final SVHaplotype haplotype : haplotypes()) {
+                final int haplotypeIndex = indexOf(haplotype);
+                builder.append('\t');
+                final TemplateMappingInformation info = getMappingInfo(haplotypeIndex, templateIndex);
+                builder.append(String.format("%.2f", get(haplotypeIndex, templateIndex)))
+                        .append(':').append(info.pairOrientation)
+                        .append(':').append(info.insertSize.orElse(-1))
+                        .append(':').append(String.format("%.2f", info.insertSize.isPresent() ? distr.logProbability(info.insertSize.getAsInt()) : Double.NaN))
+                        .append(':').append(String.format("%.2f", info.firstAlignmentScore.orElse(Double.NaN)))
+                        .append(':').append(String.format("%.2f", info.secondAlignmentScore.orElse(Double.NaN)));
+                if (haplotype.getName().equals("ref")) {
+                    builder.append(':').append(info.crossesBreakPoint(refBreakPoints) ? "1" : "0");
+                } else if (haplotype.getName().equals("alt")) {
+                    builder.append(':').append(info.crossesBreakPoint(altBreakPoints) ? "1" : "0");
+                }
+            }
+        }
+        return builder.toString();
     }
 }

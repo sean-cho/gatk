@@ -316,7 +316,7 @@ public final class AlignmentInterval {
         // +1 because the BwaMemAlignment class has 0-based coordinate system
         this.referenceSpan = new SimpleInterval(refName,
                 alignment.getRefStart() + 1, alignment.getRefEnd());
-        this.forwardStrand = 0 == (alignment.getSamFlag() & SAMFlag.READ_REVERSE_STRAND.intValue());
+        this.forwardStrand = SAMFlag.READ_REVERSE_STRAND.isUnset(alignment.getSamFlag());
         this.cigarAlong5to3DirectionOfContig = forwardStrand ? TextCigarCodec.decode(alignment.getCigar())
                 : CigarUtils.invertCigar(TextCigarCodec.decode(alignment.getCigar()));
         Utils.validateArg(

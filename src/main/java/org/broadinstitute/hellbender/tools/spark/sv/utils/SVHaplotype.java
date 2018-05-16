@@ -3,13 +3,18 @@ package org.broadinstitute.hellbender.tools.spark.sv.utils;
 import htsjdk.samtools.Cigar;
 import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
+import htsjdk.samtools.SAMSequenceDictionary;
+import htsjdk.samtools.SAMSequenceRecord;
 import org.apache.commons.collections4.IterableUtils;
+import org.broadinstitute.hellbender.engine.datasources.ReferenceSource;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignedContig;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignmentInterval;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AssemblyContigAlignmentsConfigPicker;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
+import org.broadinstitute.hellbender.utils.reference.ReferenceBases;
 
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -156,9 +161,6 @@ public interface SVHaplotype {
         return result;
     }
 
-    int insertSize(final int start, final int end);
-
-
     /**
      * Returns the mapping reference span for this haplotype.
      * <p>
@@ -254,6 +256,7 @@ public interface SVHaplotype {
             return new Cigar(new ArrayList<>(cigarElements));
         }
     }
+
 
     String getVariantId();
 }

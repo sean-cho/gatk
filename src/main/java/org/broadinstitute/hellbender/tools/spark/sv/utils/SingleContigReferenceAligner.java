@@ -4,11 +4,13 @@ import com.sun.deploy.util.ParameterUtil;
 import htsjdk.samtools.SAMFlag;
 import org.apache.commons.math3.util.Pair;
 import org.broadinstitute.hellbender.exceptions.GATKException;
+import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignmentInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemAligner;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemAlignment;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemIndex;
+import org.broadinstitute.hellbender.utils.bwa.CouldNotCreateIndexException;
 import org.broadinstitute.hellbender.utils.reference.FastaReferenceWriter;
 
 import java.io.File;
@@ -25,14 +27,17 @@ import java.util.stream.Stream;
 /**
  * Encompasses an aligner to a single-contig reference.
  * <p>
- *     This is an {@link AutoCloseable} mean to be use in try-with-resource constructs.
- * </p>
- * <p>
+ *     This is an {@link AutoCloseable} meant to be use in <i>try-with-resource</i> construct.
  *     If you don't do so, please remember to call {@link #close} at the end to free
  *     resources.
  * </p>
+ * <p>
+ *     Notice that {@link #getAligner()} provides direct access to the underlying {@link BwaMemAligner} to
+ *     allow for customization if alignment options only. So please refrain from calling non-option customization
+ *     methods on it directly.
+ * </p>
  */
-public class SingleReferenceSequenceAligner implements AutoCloseable {
+public final class SingleContigReferenceAligner implements AutoCloseable {
 
     private final File image;
     private final BwaMemAligner aligner;
@@ -40,7 +45,16 @@ public class SingleReferenceSequenceAligner implements AutoCloseable {
     private final List<String> refNames;
     private boolean closed = false;
 
-    public SingleReferenceSequenceAligner(final String name, final byte[] bases) {
+    /**
+     * Creates an aligner given the single contig name and base sequence.
+     * @param name the single contig name
+     * @param bases the single contig sequence.
+     *
+     * @throws IllegalArgumentException if any input is {@code null} or the input bases array has
+     *  length 0.
+     * @throws GATKException if exception occurred when creating the corresponding index or the underlying aligner.
+     */
+    public SingleContigReferenceAligner(final String name, final byte[] bases) {
         Utils.nonNull(name, "the input reference name cannot be null");
         Utils.nonNull(bases, "the input bases cannot be null");
         Utils.validate(bases.length > 0, "the reference contig bases sequence must have at least one base");
@@ -54,7 +68,7 @@ public class SingleReferenceSequenceAligner implements AutoCloseable {
             fasta.delete(); // we don't need the fasta around.
             index = new BwaMemIndex(image.toString());
             aligner = new BwaMemAligner(index);
-        } catch (final IOException ex) {
+        } catch (final IOException | RuntimeException ex) {
             throw new GATKException("could not create index files", ex);
         }
         refNames = Collections.singletonList(name);
@@ -63,8 +77,7 @@ public class SingleReferenceSequenceAligner implements AutoCloseable {
     /**
      * Gives access to the underlying aligner so that you can modify its options.
      * <p>
-     *     You could align sequences directly thru the return object but in that case you will lose the
-     *     {@link BwaMemAlignment} to {@link AlignmentInterval} translation.
+     *      Please only call alignment option customization methods unless you know what you are doing.
      * </p>
      *
      * @return never {@code null}.
@@ -126,7 +139,7 @@ public class SingleReferenceSequenceAligner implements AutoCloseable {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         if (!closed) {
             aligner.close();
             closed = true;
