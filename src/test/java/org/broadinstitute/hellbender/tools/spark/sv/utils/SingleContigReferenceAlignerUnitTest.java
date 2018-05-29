@@ -42,7 +42,7 @@ public class SingleContigReferenceAlignerUnitTest extends BaseTest {
                 a -> "contig", a -> a);
         try {
             aligner.close();
-        } catch (final IOException ex) {
+        } catch (final RuntimeException ex) {
             Assert.fail("unexpected exception when closing");
         }
         aligner.align(Collections.singletonList(Arrays.copyOfRange(refBases, 100, 200)));

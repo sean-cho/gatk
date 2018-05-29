@@ -16,9 +16,9 @@ public abstract class ReferenceInputArgumentCollection implements Serializable {
      * Get the reference file specified at the command line, creating the File object first if necessary.
      * @Deprecated
      */
-    public File getReferenceFile() {
-        return new File(getReferenceFileName());
-    }
+    //public File getReferenceFile() {
+    //    return new File(getReferenceFileName());
+    //}
 
     /**
      * Get the name of the reference file specified at the command line.

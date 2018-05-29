@@ -1,28 +1,22 @@
 package org.broadinstitute.hellbender.tools.spark.sv.utils;
 
-import com.sun.deploy.util.ParameterUtil;
 import htsjdk.samtools.SAMFlag;
 import org.apache.commons.math3.util.Pair;
 import org.broadinstitute.hellbender.exceptions.GATKException;
-import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignmentInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemAligner;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemAlignment;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemIndex;
-import org.broadinstitute.hellbender.utils.bwa.CouldNotCreateIndexException;
 import org.broadinstitute.hellbender.utils.reference.FastaReferenceWriter;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Encompasses an aligner to a single-contig reference.

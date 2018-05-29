@@ -80,11 +80,10 @@ public class ArraySVHaplotype extends AbstractSVHaplotype {
         try (final SingleContigReferenceAligner aligner = new SingleContigReferenceAligner(name, bases)) {
             final List<byte[]> seqs = Utils.stream(input).map(basesOf).collect(Collectors.toList());
             return aligner.align(seqs);
-        } catch (final IOException ex) {
+        } catch (final RuntimeException ex) {
             throw new GATKException("could not create aligner", ex);
         }
     }
-
 
     public static class Serializer<S extends ArraySVHaplotype> extends AbstractSVHaplotype.Serializer<S> {
 
