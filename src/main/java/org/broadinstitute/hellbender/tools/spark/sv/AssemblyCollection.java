@@ -51,7 +51,7 @@ public class AssemblyCollection implements Serializable {
         final String path = fastqDir + "/" + String.format(fastqFileFormat, assemblyNumber);
         final List<Template> result = new ArrayList<>();
         if (!BucketUtils.fileExists(path)) {
-            throw new UserException.CouldNotReadInput(path, "missing input file for assembly number " + assemblyNumber);
+            throw new UserException.CouldNotReadInputFile(path, "missing input file for assembly number " + assemblyNumber);
         } else {
             final List<SVFastqUtils.FastqRead> fastqReads = SVFastqUtils.readFastqFile(path.toString());
             final int numberOfFastqReads = fastqReads.size();

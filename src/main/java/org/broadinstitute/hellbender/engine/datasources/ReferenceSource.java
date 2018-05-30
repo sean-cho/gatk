@@ -14,9 +14,7 @@ public interface ReferenceSource {
 
     SAMSequenceDictionary getReferenceSequenceDictionary(SAMSequenceDictionary optReadSequenceDictionaryToMatch) throws IOException;
 
-    default ReferenceBases getReferenceBases(final SimpleInterval interval) throws IOException {
-        return getReferenceBases(interval);
-    }
+    ReferenceBases getReferenceBases(final SimpleInterval interval) throws IOException;
 
     default SAMSequenceDictionary getReferenceSequenceDictionary() throws IOException {
         return getReferenceSequenceDictionary(null);
