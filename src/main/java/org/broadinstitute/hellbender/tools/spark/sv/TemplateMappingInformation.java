@@ -8,21 +8,16 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignmentInterval;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVHaplotype;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.Strand;
-import org.broadinstitute.hellbender.utils.Nucleotide;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.read.CigarUtils;
-import org.broadinstitute.hellbender.utils.report.GATKReportColumnFormat;
 
 import java.io.Serializable;
-import java.util.ArrayDeque;
 import java.util.Comparator;
-import java.util.Deque;
 import java.util.List;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
-import java.util.Stack;
 
 /**
  * Created by valentin on 6/9/17.
@@ -47,7 +42,7 @@ public class TemplateMappingInformation implements Serializable {
     public final int minCoordinate;
     public final int maxCoordinate;
 
-    public static TemplateMappingInformation fromAlignments(final SVHaplotype haplotype,
+    public static TemplateMappingInformation fromAlignments(final RealignmentScoreArgumentCollection realignmentScoreParameters, final SVHaplotype haplotype,
                                                             final byte[] firstBases, final List<AlignmentInterval> firstIntervals,
                                                             final byte[] secondBases, final List<AlignmentInterval> secondIntervals) {
         Utils.nonNull(firstIntervals);
@@ -57,9 +52,9 @@ public class TemplateMappingInformation implements Serializable {
         if (firstIntervals.isEmpty() && secondIntervals.isEmpty()) {
             return new TemplateMappingInformation();
         } else if (secondIntervals.isEmpty()) {
-            return new TemplateMappingInformation(score(haplotype, firstBases, firstIntervals), unclippedStart(firstIntervals), unclippedEnd(firstIntervals), firstIntervals, true);
+            return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals), unclippedStart(firstIntervals), unclippedEnd(firstIntervals), firstIntervals, true);
         } else if (firstIntervals.isEmpty()) {
-            return new TemplateMappingInformation(score(haplotype, secondBases, secondIntervals), unclippedStart(secondIntervals), unclippedEnd(secondIntervals), secondIntervals, false);
+            return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), unclippedStart(secondIntervals), unclippedEnd(secondIntervals), secondIntervals, false);
         } else {
             final Pair<List<AlignmentInterval>, List<AlignmentInterval>> sortedAlignments
                     = sortLeftRightAlignments(firstIntervals, secondIntervals);
@@ -67,13 +62,13 @@ public class TemplateMappingInformation implements Serializable {
                     strand(sortedAlignments.getLeft()), strand(sortedAlignments.getRight()));
             final ReadPairOrientation orientation = ReadPairOrientation.fromStrands(strands.getLeft(), strands.getRight());
             if (orientation.isProper()) {
-                return new TemplateMappingInformation(score(haplotype, firstBases, firstIntervals),
-                                                      score(haplotype, secondBases, secondIntervals), unclippedStart(sortedAlignments.getLeft()), unclippedEnd(sortedAlignments.getRight()),
+                return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals),
+                                                      score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), unclippedStart(sortedAlignments.getLeft()), unclippedEnd(sortedAlignments.getRight()),
                         firstIntervals, secondIntervals,
                         unclippedEnd(sortedAlignments.getRight()) - unclippedStart(sortedAlignments.getLeft()));
             } else {
-                return new TemplateMappingInformation(score(haplotype, firstBases, firstIntervals),
-                        score(haplotype, secondBases, secondIntervals), unclippedStart(sortedAlignments.getLeft()), unclippedEnd(sortedAlignments.getRight()), firstIntervals, secondIntervals, orientation);
+                return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals),
+                        score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), unclippedStart(sortedAlignments.getLeft()), unclippedEnd(sortedAlignments.getRight()), firstIntervals, secondIntervals, orientation);
             }
         }
     }
@@ -132,8 +127,8 @@ public class TemplateMappingInformation implements Serializable {
         maxCoordinate = Integer.MIN_VALUE;
     }
 
-    private static double score(final SVHaplotype haplotype, final byte[] seq, final List<AlignmentInterval> intervals) {
-        return intervals.isEmpty() ? Double.NaN : AlignmentScore.calculate(haplotype.getBases(), seq, intervals).getValue();
+    private static double score(final RealignmentScoreArgumentCollection parameters, final SVHaplotype haplotype, final byte[] seq, final List<AlignmentInterval> intervals) {
+        return intervals.isEmpty() ? Double.NaN : RealignmentScore.calculate(parameters, haplotype.getBases(), seq, intervals).value;
 
     }
 

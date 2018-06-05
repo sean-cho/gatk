@@ -4,8 +4,6 @@ import com.esotericsoftware.kryo.DefaultSerializer;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import htsjdk.samtools.SAMFileHeader;
-import htsjdk.samtools.SAMReadGroupRecord;
 import htsjdk.samtools.SAMRecord;
 import htsjdk.samtools.util.Locatable;
 import org.broadinstitute.hellbender.exceptions.UserException;
@@ -35,7 +33,7 @@ public class SVContig extends ArraySVHaplotype {
         } else if (isAlternative()) {
             return Double.NEGATIVE_INFINITY;
         } else {
-            return referenceAlignmentScore == null ? Double.NaN : referenceAlignmentScore.getValue();
+            return referenceAlignmentScore == null ? Double.NaN : referenceAlignmentScore.value;
         }
     }
 
@@ -45,7 +43,7 @@ public class SVContig extends ArraySVHaplotype {
         } else if (name.equals("ref")) {
             return Double.NEGATIVE_INFINITY;
         } else {
-            return alternativeAlignmentScore == null ? Double.NaN  : alternativeAlignmentScore.getValue();
+            return alternativeAlignmentScore == null ? Double.NaN  : alternativeAlignmentScore.value;
         }
     }
 
@@ -55,19 +53,19 @@ public class SVContig extends ArraySVHaplotype {
 
     private final List<AlignmentInterval> referenceAlignment;
     private final List<AlignmentInterval> alternativeAlignment;
-    private final AlignmentScore referenceAlignmentScore;
-    private final AlignmentScore alternativeAlignmentScore;
+    private final RealignmentScore referenceAlignmentScore;
+    private final RealignmentScore alternativeAlignmentScore;
     private final double callQuality;
     private final Call call;
     private List<GATKRead> reads;
 
 
-    public static SVContig of(final GATKRead read) {
+    public static SVContig of(final GATKRead read, final RealignmentScoreArgumentCollection scoreParameters) {
         final String variantId = getMandatoryAttribute(read, ComposeStructuralVariantHaplotypesSpark.VARIANT_CONTEXT_TAG);
         final List<AlignmentInterval> refAln = getAlignmentIntervalsAttribute(read, ComposeStructuralVariantHaplotypesSpark.REFERENCE_ALIGNMENT_TAG);
         final List<AlignmentInterval> altAln = getAlignmentIntervalsAttribute(read, ComposeStructuralVariantHaplotypesSpark.ALTERNATIVE_ALIGNMENT_TAG);
-        final AlignmentScore refScore = getOptionalAlignmentScore(read, ComposeStructuralVariantHaplotypesSpark.REFERENCE_SCORE_TAG);
-        final AlignmentScore altScore = getOptionalAlignmentScore(read, ComposeStructuralVariantHaplotypesSpark.ALTERNATIVE_SCORE_TAG);
+        final RealignmentScore refScore = getOptionalAlignmentScore(read, ComposeStructuralVariantHaplotypesSpark.REFERENCE_SCORE_TAG, scoreParameters);
+        final RealignmentScore altScore = getOptionalAlignmentScore(read, ComposeStructuralVariantHaplotypesSpark.ALTERNATIVE_SCORE_TAG, scoreParameters);
         final SimpleInterval location = new SimpleInterval(read.getAssignedContig(), read.getAssignedStart(), read.getAssignedStart());
         return new SVContig(read.getName(), location, variantId, read.getBases(), refAln, refScore, altAln, altScore);
     }
@@ -80,9 +78,9 @@ public class SVContig extends ArraySVHaplotype {
         return alternativeAlignment;
     }
 
-    private static AlignmentScore getOptionalAlignmentScore(final GATKRead read, final String tag) {
+    private static RealignmentScore getOptionalAlignmentScore(final GATKRead read, final String tag, final RealignmentScoreArgumentCollection parameters) {
         final String str = read.getAttributeAsString(tag);
-        return str == null ? null : AlignmentScore.valueOf(str);
+        return str == null ? null : RealignmentScore.valueOf(str, parameters);
     }
 
     private static String getMandatoryAttribute(final GATKRead read, final String tag) {
@@ -96,8 +94,8 @@ public class SVContig extends ArraySVHaplotype {
     }
 
     public SVContig(final String name, final Locatable loc, final String variantId,
-                    final byte[] bases, final List<AlignmentInterval> refAln, final AlignmentScore refScore,
-                    final List<AlignmentInterval> altAln, final AlignmentScore altScore) {
+                    final byte[] bases, final List<AlignmentInterval> refAln, final RealignmentScore refScore,
+                    final List<AlignmentInterval> altAln, final RealignmentScore altScore) {
         super(name, refAln, bases, variantId, SimpleInterval.of(loc), true);
         if (isReference() || isAlternative()) {
             throw new IllegalArgumentException("invalid assembled contig name, must not be reference or alternative like: " + name);
@@ -106,8 +104,8 @@ public class SVContig extends ArraySVHaplotype {
         this.alternativeAlignment = altAln;
         this.referenceAlignmentScore = refScore;
         this.alternativeAlignmentScore = altScore;
-        final double refScoreValue = refScore == null ? Double.NaN : refScore.getValue();
-        final double altScoreValue = refScore == null ? Double.NaN : altScore.getValue();
+        final double refScoreValue = refScore == null ? Double.NaN : refScore.value;
+        final double altScoreValue = refScore == null ? Double.NaN : altScore.value;
         if (refScoreValue < altScoreValue) {
             this.call = Call.ALT;
             this.callQuality = altScoreValue - refScoreValue;
@@ -124,8 +122,8 @@ public class SVContig extends ArraySVHaplotype {
         super(kryo, input);
         this.referenceAlignment = Serializer.readAlignment(kryo, input);
         this.alternativeAlignment = Serializer.readAlignment(kryo, input);
-        this.referenceAlignmentScore = kryo.readObjectOrNull(input, AlignmentScore.class);
-        this.alternativeAlignmentScore = kryo.readObjectOrNull(input, AlignmentScore.class);
+        this.referenceAlignmentScore = kryo.readObjectOrNull(input, RealignmentScore.class);
+        this.alternativeAlignmentScore = kryo.readObjectOrNull(input, RealignmentScore.class);
         this.call = Call.valueOf(input.readString());
         this.callQuality = input.readDouble();
     }
@@ -137,8 +135,8 @@ public class SVContig extends ArraySVHaplotype {
             super.write(kryo, output, object);
             writeAlignment(kryo, output, object.referenceAlignment);
             writeAlignment(kryo, output, object.alternativeAlignment);
-            kryo.writeObjectOrNull(output, object.referenceAlignmentScore, AlignmentScore.class);
-            kryo.writeObjectOrNull(output, object.alternativeAlignmentScore, AlignmentScore.class);
+            kryo.writeObjectOrNull(output, object.referenceAlignmentScore, RealignmentScore.class);
+            kryo.writeObjectOrNull(output, object.alternativeAlignmentScore, RealignmentScore.class);
             output.writeString(object.call.name());
             output.writeDouble(object.callQuality);
         }

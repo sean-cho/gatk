@@ -13,7 +13,6 @@ import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.GenotypeBuilder;
 import htsjdk.variant.variantcontext.GenotypeLikelihoods;
-import htsjdk.variant.variantcontext.StructuralVariantType;
 import htsjdk.variant.variantcontext.VariantContextBuilder;
 import htsjdk.variant.vcf.VCFConstants;
 import htsjdk.variant.vcf.VCFFormatHeaderLine;
@@ -112,6 +111,9 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     @ArgumentCollection
     private RequiredVariantInputArgumentCollection variantArguments = new RequiredVariantInputArgumentCollection();
 
+    @ArgumentCollection
+    private RealignmentScoreArgumentCollection realignmentScoreArguments = new RealignmentScoreArgumentCollection();
+
     @Argument(doc = "fastq files location",
             shortName = FASTQ_FILE_DIR_SHORT_NAME,
             fullName = FASTQ_FILE_DIR_FULL_NAME)
@@ -149,7 +151,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     @Argument(doc = "parallelism factor", shortName = "pfactor", fullName = "parallelismFactor", optional = true)
     private int parallelismFactor = 4;
 
-    @Argument(doc = "minimum likelihood (Phred) difference to consider that a template or read support an allele over any other", shortName = "infoTLD", fullName = "informativeTemplateLikelihoodDifference", optional = true)
+    @Argument(doc = "minimum likelihood (Phred) difference to consider that a template or read support an allele over any other",
+            shortName = "infoTLD", fullName = "informativeTemplateLikelihoodDifference", optional = true)
     private double informativeTemplateDifferencePhred = 2.0;
 
     @Argument(doc = "insert size distribution",
@@ -225,7 +228,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         final JavaRDD<SVHaplotype> haplotypeAndContigs = haplotypesAndContigsSource
                 .getParallelReads(haplotypesAndContigsFile, referenceArguments.getReferenceFileName(), traversalParameters)
                 .repartition(parallelism)
-                .map(r -> r.getReadGroup().equals("CTG") ? SVContig.of(r) : ArraySVHaplotype.of(r));
+                .map(r -> r.getReadGroup().equals("CTG") ? SVContig.of(r, realignmentScoreArguments) : ArraySVHaplotype.of(r));
         final JavaRDD<SVContext> variants = variantsSource.getParallelVariantContexts(
                 variantArguments.variantFiles.get(0).getFeaturePath(), getIntervals())
                 .repartition(parallelism)
@@ -520,7 +523,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         final List<AlignmentInterval> firstIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(firstAlignment, haplotypeName, template.fragments().get(0).length());
                         final List<AlignmentInterval> secondIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(secondAlignment, haplotypeName, template.fragments().get(1).length());
 
-                        final TemplateMappingInformation mappingInformation = TemplateMappingInformation.fromAlignments(haplotype,
+                        final TemplateMappingInformation mappingInformation = TemplateMappingInformation.fromAlignments(realignmentScoreArguments, haplotype,
                                 template.fragments().get(0).bases(), firstIntervals,
                                 template.fragments().get(1).bases(), secondIntervals);
                         scoreTable.setMappingInfo(h, i, mappingInformation);
@@ -602,8 +605,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                 for (int h = 0; h < contigs.size(); h++) {
                     final SVContig contig = contigs.get(h);
                     final int mappingInfoIndex = haplotypes.indexOf(contig);
-                    double haplotypeAltScore = AlignmentScore.calculate(haplotypes.get(altHaplotypeIndex).getBases(), contig.getBases(), contig.getAlternativeAlignment()).getValue();
-                    double haplotypeRefScore = AlignmentScore.calculate(haplotypes.get(refHaplotypeIndex).getBases(), contig.getBases(), contig.getReferenceAlignment()).getValue();
+                    double haplotypeAltScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(altHaplotypeIndex).getBases(), contig.getBases(), contig.getAlternativeAlignment()).value;
+                    double haplotypeRefScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(refHaplotypeIndex).getBases(), contig.getBases(), contig.getReferenceAlignment()).value;
                     final double maxMQ = contig.getMinimumMappingQuality();
                     final double base = Math.max(haplotypeAltScore, haplotypeRefScore);
                     haplotypeAltScore -= base;
