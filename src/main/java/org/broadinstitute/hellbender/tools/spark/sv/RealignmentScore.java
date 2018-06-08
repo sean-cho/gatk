@@ -16,13 +16,11 @@ import java.util.stream.Collectors;
  */
 public final class RealignmentScore {
 
-    public final double strandSwitchPenalty;
     public final double matchPenalty;
     public final double mismatchPenalty;
     public final double gapOpenPenalty;
     public final double gapExtendPenalty;
 
-    public final int numberOfStrandSwitches;
     public final int numberOfIndels;
     public final int numberOfMatches;
     public final int numberOfMismatches;
@@ -30,24 +28,20 @@ public final class RealignmentScore {
 
     public final double value;
 
-    public RealignmentScore(final RealignmentScoreArgumentCollection parameters, final int matches, final int mismatches, final int indels, final int totalIndelLength, final int reversals) {
+    public RealignmentScore(final RealignmentScoreArgumentCollection parameters, final int matches, final int mismatches, final int indels, final int totalIndelLength) {
         ParamUtils.isPositiveOrZero(matches, "number of matches cannot be negative");
         ParamUtils.isPositiveOrZero(mismatches, "number of mismatches cannot be negative");
         ParamUtils.isPositiveOrZero(indels, "number of indels cannot be negative");
-        ParamUtils.isPositiveOrZero(reversals, "number of reversals cannot be negative");
         ParamUtils.isPositiveOrZero(totalIndelLength - indels, "total length of indels minus the number of indels cannot be negative");
-        this.strandSwitchPenalty = parameters.strandSwitchPenalty;
         this.gapExtendPenalty = parameters.gapExtendPenalty;
         this.gapOpenPenalty = parameters.gapOpenPenalty;
         this.mismatchPenalty = parameters.mismatchPenalty;
         this.matchPenalty = parameters.matchPenalty;
-        this.numberOfStrandSwitches = reversals;
         this.numberOfIndels = indels;
         this.numberOfMatches = matches;
         this.numberOfMismatches = mismatches;
         this.indelLengthSum = totalIndelLength;
-        this.value = numberOfMismatches * strandSwitchPenalty
-                + numberOfIndels * gapOpenPenalty
+        this.value = numberOfIndels * gapOpenPenalty
                 + numberOfMatches * matchPenalty
                 + numberOfMismatches * mismatchPenalty
                 + (indelLengthSum - numberOfIndels) * gapExtendPenalty;
@@ -66,11 +60,12 @@ public final class RealignmentScore {
         final int indels = ParamUtils.isPositiveOrZeroInteger(parts[nextIdx++], "indels is not a valid positive integer");
         final int indelLenghts = ParamUtils.isPositiveOrZeroInteger(parts[nextIdx++], "indel-length is not a valid positive integer");
         final int reversals = ParamUtils.isPositiveOrZeroInteger(parts[nextIdx], "reversals is not a valid positive integer");
-        return new RealignmentScore(parameters, matches, misMatches, indels, indelLenghts, reversals);
+        return new RealignmentScore(parameters, matches, misMatches, indels, indelLenghts);
     }
 
-    private static RealignmentScore calculate(final RealignmentScoreArgumentCollection parameters, final int direction, final byte[] ref, final byte[] seq, final List<AlignmentInterval> intervals) {
-        int totalReversals = 0;
+    private static RealignmentScore calculate(final RealignmentScoreArgumentCollection parameters,
+                                              final int direction, final byte[] ref, final byte[] seq,
+                                              final List<AlignmentInterval> intervals) {
         int totalIndels = 0;
         int totalMatches = 0;
         int totalMismatches = 0;
@@ -80,17 +75,14 @@ public final class RealignmentScore {
             if (i > 0) {
                 final AlignmentInterval prev = intervals.get(i - 1);
 
-                final AlignmentInterval left = direction > 0 ? prev : ai;
-                final AlignmentInterval right = direction > 0 ? ai : prev;
-                final int refIndelLength = right.referenceSpan.getStart() - left.referenceSpan.getEnd();
-                final int ctgIndelLength = prev.endInAssembledContig - ai.startInAssembledContig;
-                if (refIndelLength != 1) {
+                final AlignmentInterval left = direction > 0 ? prev : ai; // left on the reference
+                final AlignmentInterval right = direction > 0 ? ai : prev; // right on the reference
+                final int refIndelLength = right.referenceSpan.getStart() - left.referenceSpan.getEnd() - 1;
+                final int ctgIndelLength = prev.endInAssembledContig - ai.startInAssembledContig - 1;
+                if (refIndelLength != 0 || ctgIndelLength != 0) {
                     totalIndels++;
-                    totalIndelLength += Math.abs(refIndelLength - 1);
-                }
-                if (ctgIndelLength != 1) {
-                    totalIndels++;
-                    totalIndelLength += Math.abs(ctgIndelLength - 1);
+                    // The max(0, -ctgIndelLength) is to correct of short overlaps on the contig due to short "unclipped" soft-clips.
+                    totalIndelLength += Math.max(Math.abs(refIndelLength) + Math.max(0, -ctgIndelLength), Math.abs(ctgIndelLength));
                 }
             }
             final int matches = ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
@@ -121,7 +113,7 @@ public final class RealignmentScore {
                 totalIndels++;
             }
         }
-        return new RealignmentScore(parameters, totalMatches, totalMismatches, totalIndels, totalIndelLength, totalReversals);
+        return new RealignmentScore(parameters, totalMatches, totalMismatches, totalIndels, totalIndelLength);
 
     }
 
@@ -170,6 +162,6 @@ public final class RealignmentScore {
 
     public String toString() {
         return value + ":" + Utils.join(",", numberOfMatches, numberOfMismatches,
-                numberOfIndels, indelLengthSum, numberOfStrandSwitches);
+                numberOfIndels, indelLengthSum);
     }
 }

@@ -671,45 +671,6 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
     }
 
     /**
-     * Class to represent and calculate the aligned contig score.
-     */
-    private static class AlignedContigScore {
-
-        public static final int STRAND_SWITCH_COST = 60;
-        public static final double MATCH_COST = 0.01;
-        public static final int MISMATCH_COST = 30;
-        public static final double GAP_OPEN_COST = 45;
-        public static final double GAP_EXTEND_COST = 3;
-
-        final int totalReversals;
-        final int totalIndels;
-        final int totalMatches;
-        final int totalMismatches;
-        final int totalIndelLength;
-
-        public AlignedContigScore(final int reversals, final int indels, final int matches, final int mismatches, final int totalIndelLength) {
-            this.totalReversals = reversals;
-            this.totalIndels = indels;
-            this.totalMatches = matches;
-            this.totalMismatches = mismatches;
-            this.totalIndelLength = totalIndelLength;
-        }
-
-        public double getValue() {
-            return -(int) Math.round(totalMatches * MATCH_COST
-                    + totalMismatches * MISMATCH_COST
-                    + totalIndels * GAP_OPEN_COST
-                    + (totalIndelLength - totalIndels) * GAP_EXTEND_COST
-                    + totalReversals * STRAND_SWITCH_COST);
-        }
-
-        public String toString() {
-            return  getValue() + ":" + Utils.join(",", totalMatches, totalMismatches,
-                    totalIndels, totalIndelLength, totalReversals);
-        }
-    }
-
-    /**
      * Represent the information derived of collecting contigs and haplotypes that are relevant to a variant context
      * and align them versus the reference and alternative haplotype.
      */
