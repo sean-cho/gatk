@@ -79,25 +79,18 @@ public final class RealignmentScore {
             final AlignmentInterval ai = intervals.get(i);
             if (i > 0) {
                 final AlignmentInterval prev = intervals.get(i - 1);
-                if (prev.forwardStrand != ai.forwardStrand) {
-                    totalReversals++;
-                    if (direction != (ai.forwardStrand ? 1 : -1)) {
-                        totalIndelLength += CigarUtils.countAlignedBases(ai.cigarAlong5to3DirectionOfContig);
-                        //     numberOfIndels++;
-                    }
-                } else {
-                    final AlignmentInterval left = ai.forwardStrand ? prev : ai;
-                    final AlignmentInterval right = ai.forwardStrand ? ai : prev;
-                    final int refIndelLength = right.referenceSpan.getStart() - left.referenceSpan.getEnd();
-                    final int ctgIndelLength = prev.endInAssembledContig - ai.startInAssembledContig;
-                    if (refIndelLength != 1) {
-                        totalIndels++;
-                        totalIndelLength += Math.abs(refIndelLength - 1);
-                    }
-                    if (ctgIndelLength != 1) {
-                        totalIndels++;
-                        totalIndelLength += Math.abs(ctgIndelLength - 1);
-                    }
+
+                final AlignmentInterval left = direction > 0 ? prev : ai;
+                final AlignmentInterval right = direction > 0 ? ai : prev;
+                final int refIndelLength = right.referenceSpan.getStart() - left.referenceSpan.getEnd();
+                final int ctgIndelLength = prev.endInAssembledContig - ai.startInAssembledContig;
+                if (refIndelLength != 1) {
+                    totalIndels++;
+                    totalIndelLength += Math.abs(refIndelLength - 1);
+                }
+                if (ctgIndelLength != 1) {
+                    totalIndels++;
+                    totalIndelLength += Math.abs(ctgIndelLength - 1);
                 }
             }
             final int matches = ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
@@ -131,6 +124,7 @@ public final class RealignmentScore {
         return new RealignmentScore(parameters, totalMatches, totalMismatches, totalIndels, totalIndelLength, totalReversals);
 
     }
+
     public static RealignmentScore calculate(final RealignmentScoreArgumentCollection parameters, final byte[] ref, final byte[] seq, final List<AlignmentInterval> alignmentIntervals) {
         final List<AlignmentInterval> intervals = alignmentIntervals.stream()
                 .sorted(Comparator.comparing(ai -> ai.startInAssembledContig))
@@ -139,9 +133,9 @@ public final class RealignmentScore {
         final int forwardAlignedBases = intervals.stream().filter(ai -> ai.forwardStrand && ai.mapQual >= parameters.minimumMappingQuality).mapToInt(ai -> CigarUtils.countAlignedBases(ai.cigarAlong5to3DirectionOfContig)).sum();
         final int reverseAlignedBases = intervals.stream().filter(ai -> !ai.forwardStrand && ai.mapQual >= parameters.minimumMappingQuality).mapToInt(ai -> CigarUtils.countAlignedBases(ai.cigarAlong5to3DirectionOfContig)).sum();
         if (forwardAlignedBases >= reverseAlignedBases) {
-            return calculate(parameters, 1, ref, seq, alignmentIntervals);
+            return calculate(parameters, 1, ref, seq, alignmentIntervals.stream().filter(ai -> ai.forwardStrand).collect(Collectors.toList()));
         } else {
-            return calculate(parameters, 0, ref, seq, alignmentIntervals);
+            return calculate(parameters, -1, ref, seq, alignmentIntervals.stream().filter(ai -> !ai.forwardStrand).collect(Collectors.toList()));
         }
     }
 
@@ -175,7 +169,7 @@ public final class RealignmentScore {
     }
 
     public String toString() {
-        return  value + ":" + Utils.join(",", numberOfMatches, numberOfMismatches,
+        return value + ":" + Utils.join(",", numberOfMatches, numberOfMismatches,
                 numberOfIndels, indelLengthSum, numberOfStrandSwitches);
     }
 }
