@@ -33,7 +33,7 @@ public class SVContig extends ArraySVHaplotype {
         } else if (isAlternative()) {
             return Double.NEGATIVE_INFINITY;
         } else {
-            return referenceAlignmentScore == null ? Double.NaN : referenceAlignmentScore.value;
+            return referenceAlignmentScore == null ? Double.NaN : referenceAlignmentScore.getLog10Prob();
         }
     }
 
@@ -43,7 +43,7 @@ public class SVContig extends ArraySVHaplotype {
         } else if (name.equals("ref")) {
             return Double.NEGATIVE_INFINITY;
         } else {
-            return alternativeAlignmentScore == null ? Double.NaN  : alternativeAlignmentScore.value;
+            return alternativeAlignmentScore == null ? Double.NaN  : alternativeAlignmentScore.getLog10Prob();
         }
     }
 
@@ -104,8 +104,8 @@ public class SVContig extends ArraySVHaplotype {
         this.alternativeAlignment = altAln;
         this.referenceAlignmentScore = refScore;
         this.alternativeAlignmentScore = altScore;
-        final double refScoreValue = refScore == null ? Double.NaN : refScore.value;
-        final double altScoreValue = refScore == null ? Double.NaN : altScore.value;
+        final double refScoreValue = refScore == null ? Double.NaN : refScore.getLog10Prob();
+        final double altScoreValue = refScore == null ? Double.NaN : altScore.getLog10Prob();
         if (refScoreValue < altScoreValue) {
             this.call = Call.ALT;
             this.callQuality = altScoreValue - refScoreValue;

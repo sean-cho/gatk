@@ -222,6 +222,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     @Override
     protected void runTool(final JavaSparkContext ctx) {
         setUp(ctx);
+        final RealignmentScoreArgumentCollection realignmentScoreArguments = this.realignmentScoreArguments;
         final List<SimpleInterval> intervals = hasIntervals() ? getIntervals()
                 : IntervalUtils.getAllIntervalsForReference(getReferenceSequenceDictionary());
         final TraversalParameters traversalParameters = new TraversalParameters(intervals, false);
@@ -311,6 +312,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         final VCFHeader header = composeOutputHeader();
         header.addMetaDataLine(new VCFInfoHeaderLine("READ_COUNT", 1, VCFHeaderLineType.Integer, "number of reads"));
         header.addMetaDataLine(new VCFInfoHeaderLine("CONTIG_COUNT", 1, VCFHeaderLineType.Integer, "number of contigs"));
+        header.addMetaDataLine(new VCFInfoHeaderLine("RUNTIME_IN_MILLIS", 1, VCFHeaderLineType.Integer, "number of millisecons to genotype this variant"));
         header.addMetaDataLine(new VCFInfoHeaderLine("REF_COVERED_RANGE", 2, VCFHeaderLineType.Integer, "ref haplotype offset covered range"));
         header.addMetaDataLine(new VCFInfoHeaderLine("REF_COVERED_RATIO", 1, VCFHeaderLineType.Float, "ref covered effective length with total length ratio"));
         header.addMetaDataLine(new VCFInfoHeaderLine("ALT_REF_COVERED_SIZE_RATIO", 1, VCFHeaderLineType.Float, "alt/ref covered length ratio"));
@@ -411,6 +413,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         final boolean ignoreTemplateThatDontOverlapBreakingPoint = this.ignoreTemplatesThatDontOverlapBreakingPoint;
         final double informativeTemplateDifferencePhred = this.informativeTemplateDifferencePhred;
         final InsertSizeDistribution insertSizeDistribution = this.insertSizeDistribution;
+        final RealignmentScoreArgumentCollection realignmentScoreArguments = this.realignmentScoreArguments;
         return input.mapPartitions(it -> {
             final SAMSequenceDictionary dictionary = broadCastDictionary.getValue();
             final Stream<Tuple2<SVContext, Tuple3<Iterable<SVHaplotype>, Iterable<Template>, Iterable<int[]>>>> variants =
@@ -425,6 +428,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     .sequential()
                     .filter(variant -> !Utils.isEmpty(variant._2()._1()))
                     .map(variant -> {
+                final long startTime = System.currentTimeMillis();
                 final List<Template> allTemplates = Utils.stream(variant._2()._2())
                         .collect(Collectors.toList());
                 final List<int[]> allMapQuals = Utils.stream(variant._2()._3())
@@ -605,8 +609,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                 for (int h = 0; h < contigs.size(); h++) {
                     final SVContig contig = contigs.get(h);
                     final int mappingInfoIndex = haplotypes.indexOf(contig);
-                    double haplotypeAltScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(altHaplotypeIndex).getBases(), contig.getBases(), contig.getAlternativeAlignment()).value;
-                    double haplotypeRefScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(refHaplotypeIndex).getBases(), contig.getBases(), contig.getReferenceAlignment()).value;
+                    double haplotypeAltScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(altHaplotypeIndex).getBases(), contig.getBases(), contig.getAlternativeAlignment()).getLog10Prob();
+                    double haplotypeRefScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(refHaplotypeIndex).getBases(), contig.getBases(), contig.getReferenceAlignment()).getLog10Prob();
                     final double maxMQ = contig.getMinimumMappingQuality();
                     final double base = Math.max(haplotypeAltScore, haplotypeRefScore);
                     haplotypeAltScore -= base;
@@ -773,9 +777,11 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                            : ((bestGenotypeIndex == 1)
                               ? Arrays.asList(variant._1().getReference(), variant._1().getAlternateAllele(0))
                               : Arrays.asList(variant._1().getAlternateAllele(0), variant._1().getAlternateAllele(0))));
+                final long endTime = System.currentTimeMillis();
                 final VariantContextBuilder newVariantBuilder = new VariantContextBuilder(variant._1());
                 newVariantBuilder.attribute("READ_COUNT", allTemplates.size() * 2);
                 newVariantBuilder.attribute("CONTIG_COUNT", haplotypes.size());
+                newVariantBuilder.attribute("RUNTIME_IN_MILLIS", endTime - startTime);
                 if (minRefPos <= maxRefPos) {
                     newVariantBuilder.attribute("REF_COVERED_RANGE", new int[] { minRefPos + 1, maxRefPos - 1 });
                     newVariantBuilder.attribute("REF_COVERED_RATIO", ((double) maxRefPos - minRefPos) / ref.getLength());

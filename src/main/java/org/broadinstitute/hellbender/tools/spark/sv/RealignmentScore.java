@@ -26,7 +26,7 @@ public final class RealignmentScore {
     public final int numberOfMismatches;
     public final int indelLengthSum;
 
-    public final double value;
+    private final double value;
 
     public RealignmentScore(final RealignmentScoreArgumentCollection parameters, final int matches, final int mismatches, final int indels, final int totalIndelLength) {
         ParamUtils.isPositiveOrZero(matches, "number of matches cannot be negative");
@@ -50,7 +50,7 @@ public final class RealignmentScore {
 
     public static RealignmentScore valueOf(final String str, final RealignmentScoreArgumentCollection parameters) {
         final String[] parts = Utils.nonNull(str).split("[:,]");
-        Utils.validateArg(parts.length == 6, "the input string has the wrong number of components");
+        Utils.validateArg(parts.length == 5, "the input string has the wrong number of components");
         int nextIdx = 0;
         // we only check that the first value is a valid double (score), we don't keep this value as is derivable from
         // the other based on penalties.
@@ -59,7 +59,6 @@ public final class RealignmentScore {
         final int misMatches = ParamUtils.isPositiveOrZeroInteger(parts[nextIdx++], "misMatches is not a valid positive integer");
         final int indels = ParamUtils.isPositiveOrZeroInteger(parts[nextIdx++], "indels is not a valid positive integer");
         final int indelLenghts = ParamUtils.isPositiveOrZeroInteger(parts[nextIdx++], "indel-length is not a valid positive integer");
-        final int reversals = ParamUtils.isPositiveOrZeroInteger(parts[nextIdx], "reversals is not a valid positive integer");
         return new RealignmentScore(parameters, matches, misMatches, indels, indelLenghts);
     }
 
@@ -81,14 +80,16 @@ public final class RealignmentScore {
                 final int ctgIndelLength = prev.endInAssembledContig - ai.startInAssembledContig - 1;
                 if (refIndelLength != 0 || ctgIndelLength != 0) {
                     totalIndels++;
+                    final int indelLength = Math.max(Math.abs(refIndelLength) + Math.max(0, -ctgIndelLength), Math.abs(ctgIndelLength));
                     // The max(0, -ctgIndelLength) is to correct of short overlaps on the contig due to short "unclipped" soft-clips.
-                    totalIndelLength += Math.max(Math.abs(refIndelLength) + Math.max(0, -ctgIndelLength), Math.abs(ctgIndelLength));
+                    totalIndelLength += indelLength;
                 }
             }
-            final int matches = ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
+            final int totalAligned = ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
                     .filter(ce -> ce.getOperator().isAlignment())
                     .mapToInt(CigarElement::getLength).sum();
             final int misMatches = calculateMismatches(ref, seq, ai);
+            final int matches = totalAligned - misMatches;
             final int indelCount = (int) ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
                     .filter(ce -> ce.getOperator().isIndel())
                     .count();
@@ -105,11 +106,13 @@ public final class RealignmentScore {
             totalIndels++;
         } else {
             if (intervals.get(0).startInAssembledContig > 1) {
-                totalIndelLength += Math.min(intervals.get(0).startInAssembledContig - 1, intervals.get(0).referenceSpan.getStart() - 1);
+                final int indelLength =  Math.min(intervals.get(0).startInAssembledContig - 1, intervals.get(0).referenceSpan.getStart());
+                totalIndelLength += indelLength;
                 totalIndels++;
             }
             if (intervals.get(intervals.size() - 1).endInAssembledContig < seq.length) {
-                totalIndelLength += seq.length - intervals.get(intervals.size() - 1).endInAssembledContig;
+                final int indelLength = seq.length - intervals.get(intervals.size() - 1).endInAssembledContig;
+                totalIndelLength += indelLength;
                 totalIndels++;
             }
         }
@@ -147,7 +150,7 @@ public final class RealignmentScore {
             final CigarElement element = elements.get(index++);
             if (element.getOperator().isAlignment()) {
                 for (int i = 0, j = 0; i < element.getLength(); i++, j += direction) {
-                    if (ai.forwardStrand && Nucleotide.decode(ref[refOffset + i]).intersects(Nucleotide.decode(seq[seqOffset + j]))) {
+                    if (ai.forwardStrand && !Nucleotide.decode(ref[refOffset + i]).intersects(Nucleotide.decode(seq[seqOffset + j]))) {
                         result++;
                     } else if (!ai.forwardStrand && !Nucleotide.decode(ref[refOffset + i]).complement().intersects(Nucleotide.decode(seq[seqOffset + j]))) {
                         result++;
@@ -161,7 +164,15 @@ public final class RealignmentScore {
     }
 
     public String toString() {
-        return value + ":" + Utils.join(",", numberOfMatches, numberOfMismatches,
+        return getPhredValue() + ":" + Utils.join(",", numberOfMatches, numberOfMismatches,
                 numberOfIndels, indelLengthSum);
+    }
+
+    public double getPhredValue() {
+        return value;
+    }
+
+    public double getLog10Prob() {
+        return value * -.1;
     }
 }

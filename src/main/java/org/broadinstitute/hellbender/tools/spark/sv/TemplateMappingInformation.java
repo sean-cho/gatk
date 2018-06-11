@@ -128,7 +128,7 @@ public class TemplateMappingInformation implements Serializable {
     }
 
     private static double score(final RealignmentScoreArgumentCollection parameters, final SVHaplotype haplotype, final byte[] seq, final List<AlignmentInterval> intervals) {
-        return intervals.isEmpty() ? Double.NaN : RealignmentScore.calculate(parameters, haplotype.getBases(), seq, intervals).value;
+        return intervals.isEmpty() ? Double.NaN : RealignmentScore.calculate(parameters, haplotype.getBases(), seq, intervals).getLog10Prob();
 
     }
 

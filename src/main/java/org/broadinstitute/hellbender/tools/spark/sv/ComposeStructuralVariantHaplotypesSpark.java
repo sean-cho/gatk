@@ -743,8 +743,8 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
                         = alternativeAlignedContigs.get(i));
                 referenceScoreTagValue[i] = referenceScore.toString();
                 alternativeScoreTagValue[i] = alternativeScore.toString();
-                hpTagValue[i] = calculateHPTag(referenceScore.value, alternativeScore.value);
-                hpQualTagValue[i] = calculateHPQualTag(referenceScore.value, alternativeScore.value);
+                hpTagValue[i] = calculateHPTag(referenceScore.getPhredValue(), alternativeScore.getPhredValue());
+                hpQualTagValue[i] = calculateHPQualTag(referenceScore.getPhredValue(), alternativeScore.getPhredValue());
             }
         }
 
@@ -790,7 +790,7 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
                 switch (Double.compare(alternativeScore, referenceScore)) {
                     case 0:
                         return VCFConstants.EMPTY_INFO_FIELD;
-                    case -1:
+                    case 1:
                         return ComposeStructuralVariantHaplotypesSpark.REF_CONTIG_NAME;
                     default:
                         return ComposeStructuralVariantHaplotypesSpark.ALT_CONTIG_NAME;
