@@ -4,6 +4,7 @@ import org.apache.commons.math3.distribution.LogNormalDistribution;
 import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.commons.math3.distribution.RealDistribution;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.utils.bwa.BwaMemPairEndStats;
 
 import java.io.Serializable;
 import java.util.regex.Matcher;
@@ -114,5 +115,9 @@ public class InsertSizeDistribution implements Serializable {
 
     public double logProbability(final int size) {
         return Math.log(probability(size));
+    }
+
+    public double stddev() {
+        return Math.sqrt(dist().getNumericalVariance());
     }
 }

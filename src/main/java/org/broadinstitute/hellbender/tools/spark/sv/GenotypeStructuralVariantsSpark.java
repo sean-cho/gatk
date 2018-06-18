@@ -57,6 +57,7 @@ import org.broadinstitute.hellbender.utils.bwa.BwaMemAlignment;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemAlignmentUtils;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemIndex;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemIndexCache;
+import org.broadinstitute.hellbender.utils.bwa.BwaMemPairEndStats;
 import org.broadinstitute.hellbender.utils.gcs.BamBucketIoUtils;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedAlleleList;
 import org.broadinstitute.hellbender.utils.genotyper.LikelihoodMatrix;
@@ -518,6 +519,13 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     final BwaMemIndex index = BwaMemIndexCache.getInstance(imageFile.toString());
                     final BwaMemAligner aligner = new BwaMemAligner(index);
                     aligner.alignPairs();
+                    aligner.dontInferPairEndStats();
+                    // Interestingly it turns out that either allow bwa to infer the insert size or provide yoursel
+                    // results in reducced accuracy!!! I think that this and indication that is best not to try t
+                    // recover with SW unmapped mates as perhaps their alignment will always be relative poor and just "mud the already muddy waters"
+                    //aligner.setProperPairEndStats(new BwaMemPairEndStats(insertSizeDistribution.average(),
+                    //        insertSizeDistribution.stddev(), insertSizeDistribution.quantile(0.01),
+                    //        insertSizeDistribution.quantile(0.99)));
                     final List<List<BwaMemAlignment>> alignments = aligner.alignSeqs(sequences);
                     final IntFunction<String> haplotypeName = i -> i == 0 ? haplotype.getName() : null;
                     for (int i = 0; i < templates.size(); i++) {

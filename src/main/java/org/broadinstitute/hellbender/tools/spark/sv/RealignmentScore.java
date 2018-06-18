@@ -41,11 +41,14 @@ public final class RealignmentScore {
         this.numberOfMatches = matches;
         this.numberOfMismatches = mismatches;
         this.indelLengthSum = totalIndelLength;
-        this.value = numberOfIndels * gapOpenPenalty
-                + numberOfMatches * matchPenalty
-                + numberOfMismatches * mismatchPenalty
-                + (indelLengthSum - numberOfIndels) * gapExtendPenalty;
-
+        if (this.numberOfMatches + this.numberOfMismatches == 0) {
+            this.value = Double.POSITIVE_INFINITY;
+        } else {
+            this.value = numberOfIndels * gapOpenPenalty
+                    + numberOfMatches * matchPenalty
+                    + numberOfMismatches * mismatchPenalty
+                    + (indelLengthSum - numberOfIndels) * gapExtendPenalty;
+        }
     }
 
     public static RealignmentScore valueOf(final String str, final RealignmentScoreArgumentCollection parameters) {
@@ -69,11 +72,30 @@ public final class RealignmentScore {
         int totalMatches = 0;
         int totalMismatches = 0;
         int totalIndelLength = 0;
-        for (int i = 0; i < intervals.size(); i++) {
-            final AlignmentInterval ai = intervals.get(i);
-            if (i > 0) {
+        if (intervals.isEmpty()) {
+            totalIndelLength = seq.length;
+            totalIndels = 1;
+        } else {
+            for (final AlignmentInterval ai : intervals) {
+                final int totalAligned = ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
+                        .filter(ce -> ce.getOperator().isAlignment())
+                        .mapToInt(CigarElement::getLength).sum();
+                final int misMatches = calculateMismatches(ref, seq, ai);
+                final int matches = totalAligned - misMatches;
+                final int indelCount = (int) ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
+                        .filter(ce -> ce.getOperator().isIndel())
+                        .count();
+                final int indelLengthSum = ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
+                        .filter(ce -> ce.getOperator().isIndel())
+                        .mapToInt(CigarElement::getLength).sum();
+                totalIndels += indelCount;
+                totalMatches += matches;
+                totalMismatches += misMatches;
+                totalIndelLength += indelLengthSum;
+            }
+            for (int i = 1; i < intervals.size(); i++) {
+                final AlignmentInterval ai = intervals.get(i);
                 final AlignmentInterval prev = intervals.get(i - 1);
-
                 final AlignmentInterval left = direction > 0 ? prev : ai; // left on the reference
                 final AlignmentInterval right = direction > 0 ? ai : prev; // right on the reference
                 final int refIndelLength = right.referenceSpan.getStart() - left.referenceSpan.getEnd() - 1;
@@ -85,28 +107,9 @@ public final class RealignmentScore {
                     totalIndelLength += indelLength;
                 }
             }
-            final int totalAligned = ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
-                    .filter(ce -> ce.getOperator().isAlignment())
-                    .mapToInt(CigarElement::getLength).sum();
-            final int misMatches = calculateMismatches(ref, seq, ai);
-            final int matches = totalAligned - misMatches;
-            final int indelCount = (int) ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
-                    .filter(ce -> ce.getOperator().isIndel())
-                    .count();
-            final int indelLengthSum = ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
-                    .filter(ce -> ce.getOperator().isIndel())
-                    .mapToInt(CigarElement::getLength).sum();
-            totalIndels += indelCount;
-            totalMatches += matches;
-            totalMismatches += misMatches;
-            totalIndelLength += indelLengthSum;
-        }
-        if (intervals.isEmpty()) {
-            totalIndelLength += seq.length;
-            totalIndels++;
-        } else {
+
             if (intervals.get(0).startInAssembledContig > 1) {
-                final int indelLength =  Math.min(intervals.get(0).startInAssembledContig - 1, intervals.get(0).referenceSpan.getStart());
+                final int indelLength = Math.min(intervals.get(0).startInAssembledContig - 1, intervals.get(0).referenceSpan.getStart());
                 totalIndelLength += indelLength;
                 totalIndels++;
             }
@@ -117,28 +120,75 @@ public final class RealignmentScore {
             }
         }
         return new RealignmentScore(parameters, totalMatches, totalMismatches, totalIndels, totalIndelLength);
-
     }
 
-    public static RealignmentScore calculate(final RealignmentScoreArgumentCollection parameters, final byte[] ref, final byte[] seq, final List<AlignmentInterval> alignmentIntervals) {
-        final List<AlignmentInterval> intervals = alignmentIntervals.stream()
+    public static RealignmentScore calculate(final RealignmentScoreArgumentCollection parameters, final byte[] ref, final byte[] seq, final List<AlignmentInterval> intervals) {
+        final List<AlignmentInterval> sortedIntervals = intervals.stream()
                 .sorted(Comparator.comparing(ai -> ai.startInAssembledContig))
                 .collect(Collectors.toList());
 
         final int forwardAlignedBases = intervals.stream().filter(ai -> ai.forwardStrand && ai.mapQual >= parameters.minimumMappingQuality).mapToInt(ai -> CigarUtils.countAlignedBases(ai.cigarAlong5to3DirectionOfContig)).sum();
         final int reverseAlignedBases = intervals.stream().filter(ai -> !ai.forwardStrand && ai.mapQual >= parameters.minimumMappingQuality).mapToInt(ai -> CigarUtils.countAlignedBases(ai.cigarAlong5to3DirectionOfContig)).sum();
-        if (forwardAlignedBases >= reverseAlignedBases) {
-            return calculate(parameters, 1, ref, seq, alignmentIntervals.stream().filter(ai -> ai.forwardStrand).collect(Collectors.toList()));
+        if (forwardAlignedBases > reverseAlignedBases * 1.1 ) {
+            return calculate(parameters, 1, ref, seq, sortedIntervals.stream().filter(ai -> ai.forwardStrand).collect(Collectors.toList()));
+        } else if (reverseAlignedBases > forwardAlignedBases * 1.1) {
+            return calculate(parameters, -1, ref, seq, sortedIntervals.stream().filter(ai -> !ai.forwardStrand).collect(Collectors.toList()));
         } else {
-            return calculate(parameters, -1, ref, seq, alignmentIntervals.stream().filter(ai -> !ai.forwardStrand).collect(Collectors.toList()));
+            final int allForwardAlignedBases = intervals.stream().filter(ai -> ai.forwardStrand).mapToInt(ai -> CigarUtils.countAlignedBases(ai.cigarAlong5to3DirectionOfContig)).sum();
+            final int allReverseAlignedBases = intervals.stream().filter(ai -> !ai.forwardStrand).mapToInt(ai -> CigarUtils.countAlignedBases(ai.cigarAlong5to3DirectionOfContig)).sum();
+            if (allForwardAlignedBases > allReverseAlignedBases * 1.1) {
+                return calculate(parameters, 1, ref, seq, sortedIntervals.stream().filter(ai -> ai.forwardStrand).collect(Collectors.toList()));
+            } else if (allReverseAlignedBases > allForwardAlignedBases * 1.1) {
+                return calculate(parameters, -1, ref, seq, sortedIntervals.stream().filter(ai -> !ai.forwardStrand).collect(Collectors.toList()));
+            } else {
+                final RealignmentScore forward = calculate(parameters, 1, ref, seq, sortedIntervals.stream().filter(ai -> ai.forwardStrand).collect(Collectors.toList()));
+                final RealignmentScore reverse = calculate(parameters, -1, ref, seq, sortedIntervals.stream().filter(ai -> !ai.forwardStrand).collect(Collectors.toList()));
+                return forward.getPhredValue() <= reverse.getPhredValue() ? forward : reverse;
+            }
         }
     }
 
+    /**
+     * Calculate the number of mismatching bases calls.
+     * @param ref reference sequence.
+     * @param refOffset first base in the reference aligned.
+     * @param seq contig/query sequence.
+     * @param seqOffset first base index in the ctg aligned.
+     * @param length length of the target region.
+     * @param forward whether the ctg is alinged on the forward (true) or reverse (false) strands.
+     * @return 0 or greater but never more than {@code length}.
+     */
+     private static int calculateMismatches(final byte[] ref, final int refOffset,
+                                            final byte[] seq, final int seqOffset,
+                                            final int length, final boolean forward) {
+         final int stop = refOffset + length;
+         int result = 0;
+         if (forward) {
+             for (int i = refOffset, j = seqOffset; i < stop; i++, j++) {
+                 if (!Nucleotide.decode(ref[i]).intersects(Nucleotide.decode(seq[j]))) {
+                     result++;
+                 }
+             }
+         } else {
+            for (int i = refOffset, j = seqOffset; i < stop; i++, j--) {
+                if (!Nucleotide.decode(ref[i]).complement().intersects(Nucleotide.decode(seq[j]))) {
+                    result++;
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Calculate base call mismatches across an alignment interval.
+     * @param ref the reference sequence.
+     * @param seq the unclipped aligned sequence.
+     * @param ai the alignment interval.
+     * @return 0 or greater and never more than the number of bases aligned (in practice a number much smaller than that).
+     */
     private static int calculateMismatches(final byte[] ref, final byte[] seq, final AlignmentInterval ai) {
         int refOffset = ai.referenceSpan.getStart() - 1;
         int direction = ai.forwardStrand ? 1 : -1;
-//        int seqOffset = direction == 1 ? (ai.startInAssembledContig - 1 - CigarUtils.countLeftHardClippedBases(ai.cigarAlong5to3DirectionOfContig))
-//                : (ai.endInAssembledContig - 1 - CigarUtils.countRightHardClippedBases(ai.cigarAlong5to3DirectionOfContig));
         int seqOffset = direction == 1 ? (ai.startInAssembledContig - 1) : (ai.endInAssembledContig - 1);
         final List<CigarElement> elements = ai.cigarAlongReference().getCigarElements();
         int index = 0;
@@ -149,13 +199,7 @@ public final class RealignmentScore {
         while (index < elements.size() && !elements.get(index).getOperator().isClipping()) {
             final CigarElement element = elements.get(index++);
             if (element.getOperator().isAlignment()) {
-                for (int i = 0, j = 0; i < element.getLength(); i++, j += direction) {
-                    if (ai.forwardStrand && !Nucleotide.decode(ref[refOffset + i]).intersects(Nucleotide.decode(seq[seqOffset + j]))) {
-                        result++;
-                    } else if (!ai.forwardStrand && !Nucleotide.decode(ref[refOffset + i]).complement().intersects(Nucleotide.decode(seq[seqOffset + j]))) {
-                        result++;
-                    }
-                }
+                result += calculateMismatches(ref, refOffset, seq, seqOffset, element.getLength(), ai.forwardStrand);
             }
             if (element.getOperator().consumesReferenceBases()) refOffset += element.getLength();
             if (element.getOperator().consumesReadBases()) seqOffset += element.getLength() * direction;
