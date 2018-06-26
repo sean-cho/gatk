@@ -57,7 +57,6 @@ import org.broadinstitute.hellbender.utils.bwa.BwaMemAlignment;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemAlignmentUtils;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemIndex;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemIndexCache;
-import org.broadinstitute.hellbender.utils.bwa.BwaMemPairEndStats;
 import org.broadinstitute.hellbender.utils.gcs.BamBucketIoUtils;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedAlleleList;
 import org.broadinstitute.hellbender.utils.genotyper.LikelihoodMatrix;
@@ -113,7 +112,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     private RequiredVariantInputArgumentCollection variantArguments = new RequiredVariantInputArgumentCollection();
 
     @ArgumentCollection
-    private RealignmentScoreArgumentCollection realignmentScoreArguments = new RealignmentScoreArgumentCollection();
+    private RealignmentScoreParameters realignmentScoreArguments = new RealignmentScoreParameters();
 
     @Argument(doc = "fastq files location",
             shortName = FASTQ_FILE_DIR_SHORT_NAME,
@@ -223,7 +222,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     @Override
     protected void runTool(final JavaSparkContext ctx) {
         setUp(ctx);
-        final RealignmentScoreArgumentCollection realignmentScoreArguments = this.realignmentScoreArguments;
+        final RealignmentScoreParameters realignmentScoreArguments = this.realignmentScoreArguments;
         final List<SimpleInterval> intervals = hasIntervals() ? getIntervals()
                 : IntervalUtils.getAllIntervalsForReference(getReferenceSequenceDictionary());
         final TraversalParameters traversalParameters = new TraversalParameters(intervals, false);
@@ -411,10 +410,9 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         final SerializableBiFunction<String, byte[], File> imageCreator =  GenotypeStructuralVariantsSpark::createTransientImageFile;
         final AlignmentPenalties penalties = this.penalties;
         final boolean ignoreReadsThatDontOverlapBreakingPoint = this.ignoreReadsThatDontOverlapBreakingPoint;
-        final boolean ignoreTemplateThatDontOverlapBreakingPoint = this.ignoreTemplatesThatDontOverlapBreakingPoint;
         final double informativeTemplateDifferencePhred = this.informativeTemplateDifferencePhred;
         final InsertSizeDistribution insertSizeDistribution = this.insertSizeDistribution;
-        final RealignmentScoreArgumentCollection realignmentScoreArguments = this.realignmentScoreArguments;
+        final RealignmentScoreParameters realignmentScoreArguments = this.realignmentScoreArguments;
         return input.mapPartitions(it -> {
             final SAMSequenceDictionary dictionary = broadCastDictionary.getValue();
             final Stream<Tuple2<SVContext, Tuple3<Iterable<SVHaplotype>, Iterable<Template>, Iterable<int[]>>>> variants =
@@ -623,31 +621,35 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     final double base = Math.max(haplotypeAltScore, haplotypeRefScore);
                     haplotypeAltScore -= base;
                     haplotypeRefScore -= base;
+                    // we cap the difference of scores by the contig mapping quality.
+                    // so that contigs that could map in several places in the genome has less weight when assigning
+                    // genotypes.
                     if (haplotypeAltScore < haplotypeRefScore) {
                         haplotypeAltScore = Math.max(haplotypeAltScore, haplotypeRefScore - 0.1 * maxMQ);
                     } else {
                         haplotypeRefScore = Math.max(haplotypeRefScore, haplotypeAltScore - 0.1 * maxMQ);
                     }
+                    // for each template we apply the scores thru the haplotype/contig `c`. We reduce/marginalize the likelihood
+                    // to take the maximum across all haplotype/contigs for that template.
                     for (int t = 0; t < templates.size(); t++) {
                         final boolean noAlignment = !scoreTable.getMappingInfo(mappingInfoIndex, t).firstAlignmentScore.isPresent()
                                 && !scoreTable.getMappingInfo(mappingInfoIndex, t).secondAlignmentScore.isPresent();
                         if (noAlignment) continue;
                         final double firstMappingScore = scoreTable.getMappingInfo(mappingInfoIndex, t).firstAlignmentScore.orElse(Double.NEGATIVE_INFINITY);
                         final double secondMappingScore = scoreTable.getMappingInfo(mappingInfoIndex, t).secondAlignmentScore.orElse(Double.NEGATIVE_INFINITY);
-       //                 if (firstMappingScore == scoreTable.bestMappingScorePerFragment[t][0]) {
                             sampleLikelihoodsFirst.set(refIdx, t,
                                     Math.max(firstMappingScore + haplotypeRefScore, sampleLikelihoodsFirst.get(refIdx, t)));
                             sampleLikelihoodsFirst.set(altIdx, t,
                                     Math.max(firstMappingScore + haplotypeAltScore, sampleLikelihoodsFirst.get(altIdx, t)));
-       //                 }
-       //                 if (secondMappingScore == scoreTable.bestMappingScorePerFragment[t][1]) {
                             sampleLikelihoodsSecond.set(refIdx, t,
                                     Math.max(secondMappingScore + haplotypeRefScore, sampleLikelihoodsSecond.get(refIdx, t)));
                             sampleLikelihoodsSecond.set(altIdx, t,
                                     Math.max(secondMappingScore + haplotypeAltScore, sampleLikelihoodsSecond.get(altIdx, t)));
-       //                 }
                     }
                 }
+                // we cap the likelihood difference for each allele haplotypes for each fragment in each template by th
+                // mapping quality of the fragment so that those reads that may map to other locations in the genome count less
+                // towards genotyping.
                 for (int t = 0; t < templates.size(); t++) {
                     for (int f = 0; f < 2; f++) {
                         final int maxMq = mapQuals.get(t)[f];
@@ -656,10 +658,10 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         final int maxIndex = matrix.get(refIdx, t) == base ? refIdx : altIdx;
                         final int minIndex = maxIndex == refIdx ? altIdx : refIdx;
                         matrix.set(minIndex, t, Math.max(matrix.get(maxIndex, t) - 0.1 * maxMq, matrix.get(minIndex, t)));
-                        //      Math.min(matrix.get(maxIndex, t), matrix.get(minIndex, t) - base);
-                        //matrix.set(minIndex, t,  Math.min(matrix.get(maxIndex, t), matrix.get(minIndex, t) - base));
                     }
                 }
+
+                // we check what templates are relevant toward genotyping, by default only those that map across a break point.
                 final boolean[] dpRelevant = new boolean[sampleLikelihoods.numberOfReads()];
 
                 for (int j = 0; j < sampleLikelihoods.numberOfReads(); j++) {
@@ -671,6 +673,24 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         considerSecondFragment = scoreTable.getMappingInfo(refHaplotypeIndex, j).crossesBreakPoint(refBreakPoints)
                                 || scoreTable.getMappingInfo(altHaplotypeIndex, j).crossesBreakPoint(altBreakPoints);
                     }
+
+                    //TODO  the following adjustment seem to increase accuracy but the maths are a bit sketchy so for now I
+                    //include it.
+                    // The idea is to penalize poorly modeled reads... those that allele haplotype likelihood difference is not
+                    // much larger than the magnitude of the likelihood of the best allele likelihood.
+                    // so for example a template fragment has lks Phred 3000 3100, there is 100 diff in Lk but is very small
+                    // when compare to how unlikely the read is even with the best haplotype (3000) so is 100 even relevant?
+                    // The code simply substract 3000 to those 100 (min 0) so in the end such a read to be of any value for Lk
+                    // calculation the worst allele lk would need to be at least 6000.
+                    //
+                    // at first may seem a reasonable thing to do but it it unclear how to weight down these reads... just take
+                    // the best lk seems arbitrary.
+                    //
+                    // This might be resolved differently by ignoring short variant differences so that the Lk is totally
+                    // defined by real SV variation and so the 3000 becomes closer to 0. Or that in general the 100 is actual
+                    // real difference rather that differences due to chance in the distribution of short variants between
+                    // contigs.
+
                     for (int k = 0; k < 2; k++) {
                         final LikelihoodMatrix<GenotypingAllele> matrix = k == 0 ? sampleLikelihoodsFirst : sampleLikelihoodsSecond;
                         final double base = Math.max(matrix.get(refIdx, j), matrix.get(altIdx, j));
@@ -685,12 +705,6 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
 
                     }
                 }
-  //                      for (int t = 0; t < templates.size(); t++) {
-  //                          final double base = Math.max(sampleLikelihoods.get(refIdx, t), sampleLikelihoods.get(altIdx, t));
-  //                          final int maxIndex = sampleLikelihoods.get(refIdx, t) == base ? refIdx : altIdx;
-  //                          final int minIndex = maxIndex == refIdx ? altIdx : refIdx;
-   //                        sampleLikelihoods.set(minIndex, t, Math.min(sampleLikelihoods.get(maxIndex, t), sampleLikelihoods.get(minIndex, t) - base));
-   //                     }
 
                     final int[] adi = new int[2];
                     int dpi = 0;

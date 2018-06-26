@@ -60,14 +60,15 @@ public class SVContig extends ArraySVHaplotype {
     private List<GATKRead> reads;
 
 
-    public static SVContig of(final GATKRead read, final RealignmentScoreArgumentCollection scoreParameters) {
+    public static SVContig of(final GATKRead read, final RealignmentScoreParameters scoreParameters) {
+        final Double qual = read.getAttributeAsDouble(ComposeStructuralVariantHaplotypesSpark.HAPLOTYPE_QUAL_TAG);
         final String variantId = getMandatoryAttribute(read, ComposeStructuralVariantHaplotypesSpark.VARIANT_CONTEXT_TAG);
         final List<AlignmentInterval> refAln = getAlignmentIntervalsAttribute(read, ComposeStructuralVariantHaplotypesSpark.REFERENCE_ALIGNMENT_TAG);
         final List<AlignmentInterval> altAln = getAlignmentIntervalsAttribute(read, ComposeStructuralVariantHaplotypesSpark.ALTERNATIVE_ALIGNMENT_TAG);
         final RealignmentScore refScore = getOptionalAlignmentScore(read, ComposeStructuralVariantHaplotypesSpark.REFERENCE_SCORE_TAG, scoreParameters);
         final RealignmentScore altScore = getOptionalAlignmentScore(read, ComposeStructuralVariantHaplotypesSpark.ALTERNATIVE_SCORE_TAG, scoreParameters);
         final SimpleInterval location = new SimpleInterval(read.getAssignedContig(), read.getAssignedStart(), read.getAssignedStart());
-        return new SVContig(read.getName(), location, variantId, read.getBases(), refAln, refScore, altAln, altScore);
+        return new SVContig(read.getName(), location, variantId, read.getBases(), refAln, refScore, altAln, altScore, qual);
     }
 
     public List<AlignmentInterval> getReferenceAlignment() {
@@ -78,9 +79,9 @@ public class SVContig extends ArraySVHaplotype {
         return alternativeAlignment;
     }
 
-    private static RealignmentScore getOptionalAlignmentScore(final GATKRead read, final String tag, final RealignmentScoreArgumentCollection parameters) {
+    private static RealignmentScore getOptionalAlignmentScore(final GATKRead read, final String tag, final RealignmentScoreParameters parameters) {
         final String str = read.getAttributeAsString(tag);
-        return str == null ? null : RealignmentScore.valueOf(str, parameters);
+        return str == null ? null : RealignmentScore.decode(str, parameters);
     }
 
     private static String getMandatoryAttribute(final GATKRead read, final String tag) {
@@ -95,7 +96,7 @@ public class SVContig extends ArraySVHaplotype {
 
     public SVContig(final String name, final Locatable loc, final String variantId,
                     final byte[] bases, final List<AlignmentInterval> refAln, final RealignmentScore refScore,
-                    final List<AlignmentInterval> altAln, final RealignmentScore altScore) {
+                    final List<AlignmentInterval> altAln, final RealignmentScore altScore, final Double qual) {
         super(name, refAln, bases, variantId, SimpleInterval.of(loc), true);
         if (isReference() || isAlternative()) {
             throw new IllegalArgumentException("invalid assembled contig name, must not be reference or alternative like: " + name);
@@ -106,15 +107,16 @@ public class SVContig extends ArraySVHaplotype {
         this.alternativeAlignmentScore = altScore;
         final double refScoreValue = refScore == null ? Double.NaN : refScore.getLog10Prob();
         final double altScoreValue = refScore == null ? Double.NaN : altScore.getLog10Prob();
+
         if (refScoreValue < altScoreValue) {
             this.call = Call.ALT;
-            this.callQuality = altScoreValue - refScoreValue;
+            this.callQuality = qual == null ? altScoreValue - refScoreValue : qual;
         } else if (altScoreValue < refScoreValue) {
             this.call = Call.REF;
-            this.callQuality = refScoreValue - altScoreValue;
+            this.callQuality = qual == null ? refScoreValue - altScoreValue : qual;
         } else {
             this.call = Call.NOCALL;
-            this.callQuality = 0.0;
+            this.callQuality = qual == null ? 0.0 : qual;
         }
     }
 

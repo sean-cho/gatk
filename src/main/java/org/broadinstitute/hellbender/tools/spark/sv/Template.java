@@ -8,6 +8,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.evidence.TemplateFragmentOrd
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVFastqUtils;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVIntervalLocator;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVIntervalTree;
+import org.broadinstitute.hellbender.tools.walkers.bqsr.BaseRecalibrator;
 import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.iterators.ArrayUtils;
@@ -140,7 +141,7 @@ public class Template implements Serializable {
     public int[] maximumMappingQuality(final SVIntervalTree<?> targetIntervals, SVIntervalLocator locator,
                                        final InsertSizeDistribution insertSizeDistribution) {
         final int[] result = new int[fragments.size()];
-        int definedMappingQualities  = 0;
+        int definedMappingQualities = 0;
         int maxQual = 0;
         for (int i = 0; i < result.length; i++) {
             final Fragment fragment = fragments.get(i);
@@ -149,7 +150,7 @@ public class Template implements Serializable {
                 if (!targetIntervals.hasOverlapper(locator.toSVInterval(mappingInterval.referenceSpan))) {
                     result[i] = 0;
                     definedMappingQualities++;
-                    continue;
+                    break;
                 } else {
                     if (result[i] == -1) {
                         definedMappingQualities++;
@@ -169,21 +170,25 @@ public class Template implements Serializable {
         } else if (maxQual == 0) {
             Arrays.fill(result, 0);
             return result;
+        } else if (definedMappingQualities < fragments.size()) {
+            // int minGap = Integer.MAX_VALUE;
+            //final int readLength = fragments.stream().mapToInt(Fragment::length).min().getAsInt();
+            //for (int i = 0; i < result.length; i++) {
+            //    if (result[i] <= 0) continue;
+            //    minGap = Math.min(minGap, fragments.get(i).alignmentIntervals().stream()
+            //                                .mapToInt(ai -> targetIntervals.smallestGapLength(locator.toSVInterval(ai.referenceSpan)))
+            //                                .min().getAsInt());
+            //}
+            //final double logDistanceProbability = insertSizeDistribution.logCumulativeProbability(minGap + 2 * readLength);
+            //final double distancePenalty = -10.0 * MathUtils.log1mexp(logDistanceProbability) / Math.log(10);
+            //final int unmappedMappingQuality = (int) Math.max(0, maxQual - distancePenalty);
+            for (int i = 0; i < result.length; i++) {
+                if (result[i] == -1) {
+                    result[i] = maxQual;
+                }
+            }
+            return result;
         } else {
-            int minGap = Integer.MAX_VALUE;
-            final int readLength = fragments.stream().mapToInt(Fragment::length).min().getAsInt();
-            for (int i = 0; i < result.length; i++) {
-                if (result[i] <= 0) continue;
-                minGap = Math.min(minGap, fragments.get(i).alignmentIntervals().stream()
-                                            .mapToInt(ai -> targetIntervals.smallestGapLength(locator.toSVInterval(ai.referenceSpan)))
-                                            .min().getAsInt());
-            }
-            final double logDistanceProbability = insertSizeDistribution.logCumulativeProbability(minGap + 2 * readLength);
-            final double distancePenalty = -10.0 * MathUtils.log1mexp(logDistanceProbability) / Math.log(10);
-            final int unmappedMappingQuality = (int) Math.max(0, maxQual - distancePenalty);
-            for (int i = 0; i < result.length; i++) {
-                if (result[i] == -1) { result[i] = unmappedMappingQuality; }
-            }
             return result;
         }
 

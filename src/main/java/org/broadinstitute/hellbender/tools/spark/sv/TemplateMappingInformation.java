@@ -42,7 +42,7 @@ public class TemplateMappingInformation implements Serializable {
     public final int minCoordinate;
     public final int maxCoordinate;
 
-    public static TemplateMappingInformation fromAlignments(final RealignmentScoreArgumentCollection realignmentScoreParameters, final SVHaplotype haplotype,
+    public static TemplateMappingInformation fromAlignments(final RealignmentScoreParameters realignmentScoreParameters, final SVHaplotype haplotype,
                                                             final byte[] firstBases, final List<AlignmentInterval> firstIntervals,
                                                             final byte[] secondBases, final List<AlignmentInterval> secondIntervals) {
         Utils.nonNull(firstIntervals);
@@ -127,7 +127,7 @@ public class TemplateMappingInformation implements Serializable {
         maxCoordinate = Integer.MIN_VALUE;
     }
 
-    private static double score(final RealignmentScoreArgumentCollection parameters, final SVHaplotype haplotype, final byte[] seq, final List<AlignmentInterval> intervals) {
+    private static double score(final RealignmentScoreParameters parameters, final SVHaplotype haplotype, final byte[] seq, final List<AlignmentInterval> intervals) {
         return intervals.isEmpty() ? Double.NaN : RealignmentScore.calculate(parameters, haplotype.getBases(), seq, intervals).getLog10Prob();
 
     }

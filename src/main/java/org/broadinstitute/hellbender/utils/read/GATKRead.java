@@ -930,5 +930,18 @@ public interface GATKRead extends Locatable {
             }
         }
     }
+
+    default Double getAttributeAsDouble(final String name) {
+        final String string = getAttributeAsString(name);
+        if (string == null) {
+            return null;
+        } else {
+            try {
+                return Double.parseDouble(string);
+            } catch (NumberFormatException ex) {
+                throw new GATKException.ReadAttributeTypeMismatch(name, "Double");
+            }
+        }
+    }
 }
 
