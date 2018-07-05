@@ -186,7 +186,7 @@ public class SVContig extends ArraySVHaplotype {
     }
 
     public int getMinimumMappingQuality() {
-        return getReferenceAlignment().stream().mapToInt(ai -> ai.mapQual).filter(mq -> mq != SAMRecord.UNKNOWN_MAPPING_QUALITY).max().orElse(0);
+        return (int) Math.min(callQuality, getReferenceAlignment().stream().mapToInt(ai -> ai.mapQual).filter(mq -> mq != SAMRecord.UNKNOWN_MAPPING_QUALITY).max().orElse(0));
     }
 
 }

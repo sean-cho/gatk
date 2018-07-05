@@ -100,8 +100,8 @@ public final class RealignmentScore {
             this.value = Double.POSITIVE_INFINITY;
         } else {
             this.value = numberOfIndels * gapOpenPenalty
-       //            + numberOfMatches * matchPenalty
-       //            + numberOfMismatches * mismatchPenalty
+                   + numberOfMatches * matchPenalty
+                   + numberOfMismatches * mismatchPenalty
                    + (indelLengthSum - numberOfIndels) * gapExtendPenalty;
         }
     }

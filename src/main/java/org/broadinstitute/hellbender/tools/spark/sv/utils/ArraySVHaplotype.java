@@ -79,6 +79,7 @@ public class ArraySVHaplotype extends AbstractSVHaplotype {
     public <T> List<List<AlignmentInterval>> align(final Iterable<T> input, Function<T, byte[]> basesOf) {
         try (final SingleContigReferenceAligner aligner = new SingleContigReferenceAligner(name, bases)) {
             final List<byte[]> seqs = Utils.stream(input).map(basesOf).collect(Collectors.toList());
+            aligner.getAligner().setMinSeedLengthOption(6);
             return aligner.align(seqs);
         } catch (final RuntimeException ex) {
             throw new GATKException("could not create aligner", ex);

@@ -20,6 +20,7 @@ import htsjdk.variant.vcf.VCFHeader;
 import htsjdk.variant.vcf.VCFHeaderLineCount;
 import htsjdk.variant.vcf.VCFHeaderLineType;
 import htsjdk.variant.vcf.VCFInfoHeaderLine;
+import org.apache.commons.lang.StringUtils;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -300,7 +301,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                                         .collect(Collectors.toList());
                              //           .filter(tt -> tt.fragments().stream().map(f -> AlignmentInterval.encode(f.alignmentIntervals())).filter(s -> s.contains("chr10,2480")).count() > 0);
                                 final Stream<int[]> allTemplatesMaxMappingQualities = allTemplates.stream()
-                                        .map(tt -> tt.maximumMappingQuality(coveredReference, locator, insertSizeDistribution));
+                                        .map(tt -> tt.fragmentMaximumMappingQualities(coveredReference, locator, insertSizeDistribution));
                                 return new Tuple2<>(t._1(), new Tuple3<>(t._2(),
                                         (Iterable<Template>) allTemplates,
                                         (Iterable<int[]>) allTemplatesMaxMappingQualities.collect(Collectors.toList())));
@@ -312,6 +313,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         final VCFHeader header = composeOutputHeader();
         header.addMetaDataLine(new VCFInfoHeaderLine("READ_COUNT", 1, VCFHeaderLineType.Integer, "number of reads"));
         header.addMetaDataLine(new VCFInfoHeaderLine("CONTIG_COUNT", 1, VCFHeaderLineType.Integer, "number of contigs"));
+        header.addMetaDataLine(new VCFInfoHeaderLine("BEST_MAPPINGS", VCFHeaderLineCount.UNBOUNDED, VCFHeaderLineType.Integer, "test"));
         header.addMetaDataLine(new VCFInfoHeaderLine("RUNTIME_IN_MILLIS", 1, VCFHeaderLineType.Integer, "number of millisecons to genotype this variant"));
         header.addMetaDataLine(new VCFInfoHeaderLine("REF_COVERED_RANGE", 2, VCFHeaderLineType.Integer, "ref haplotype offset covered range"));
         header.addMetaDataLine(new VCFInfoHeaderLine("REF_COVERED_RATIO", 1, VCFHeaderLineType.Float, "ref covered effective length with total length ratio"));
@@ -403,6 +405,18 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         public static Call of(final SVContext context) {
             return new Call(context, Collections.emptyList());
         }
+    }
+
+    @SuppressWarnings("unused")
+    private static Object[] debug00(final LikelihoodMatrix<?> left, final LikelihoodMatrix<?> right) {
+        final Object[] result = new Object[left.numberOfReads()];
+        for (int i = 0; i < result.length; i++) {
+            final double one = left.get(0, i) + right.get(0, i);
+            final double two = left.get(1, i) + right.get(1, i);
+            result[i] = StringUtils.join(new Object[] {left.get(0,i), right.get(0, i), left.get(1, i), right.get(1, i), left.get(0, i)  + right.get(0,i),
+                      left.get(1, i) + right.get(1, i), one - two, (one > two) ? - Math.min(0, two - 2 *one) : Math.min(0, one - 2* two)} ,   ",");
+        }
+        return result;
     }
 
     private JavaRDD<Call> processVariants(final JavaPairRDD<SVContext, Tuple3<Iterable<SVHaplotype>, Iterable<Template>, Iterable<int[]>>> input, final SAMFileHeader outputAlignmentHeader, final JavaSparkContext ctx) {
@@ -586,6 +600,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     }
                 }
                 scoreTable.calculateBestMappingScores();
+
                 final ReadLikelihoods<GenotypingAllele> likelihoods = new ReadLikelihoods<>(SampleList.singletonSampleList("sample"),
                         new IndexedAlleleList<>(refAllele, altAllele), Collections.singletonMap("sample", reads));
                 final ReadLikelihoods<GenotypingAllele> likelihoodsFirst = new ReadLikelihoods<>(SampleList.singletonSampleList("sample"),
@@ -690,13 +705,13 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     // defined by real SV variation and so the 3000 becomes closer to 0. Or that in general the 100 is actual
                     // real difference rather that differences due to chance in the distribution of short variants between
                     // contigs.
-
+                    //if (sampleLikelihoodsFirst == sampleLikelihoodsSecond) debug00(sampleLikelihoodsFirst, sampleLikelihoodsSecond);
                     for (int k = 0; k < 2; k++) {
                         final LikelihoodMatrix<GenotypingAllele> matrix = k == 0 ? sampleLikelihoodsFirst : sampleLikelihoodsSecond;
                         final double base = Math.max(matrix.get(refIdx, j), matrix.get(altIdx, j));
                         final int maxIndex = matrix.get(refIdx, j) == base ? refIdx : altIdx;
                         final int minIndex = maxIndex == refIdx ? altIdx : refIdx;
-                        matrix.set(minIndex, j, Math.min(matrix.get(maxIndex, j), matrix.get(minIndex, j) - base));
+                        matrix.set(minIndex, j, Math.min(matrix.get(maxIndex, j), matrix.get(minIndex, j) - scoreTable.bestMappingScorePerFragment[j][k]));
                     }
                     dpRelevant[j] = considerFirstFragment || considerSecondFragment;
                     for (int i = 0; i < sampleLikelihoods.numberOfAlleles(); i++) {
@@ -808,6 +823,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     newVariantBuilder.attribute("REF_COVERED_RANGE", new int[] { minRefPos + 1, maxRefPos - 1 });
                     newVariantBuilder.attribute("REF_COVERED_RATIO", ((double) maxRefPos - minRefPos) / ref.getLength());
                     newVariantBuilder.attribute("ALT_REF_COVERED_SIZE_RATIO", (alt.getLength() + (maxRefPos - minRefPos )- ref.getLength()) / ((double) maxRefPos - minRefPos));
+                   // newVariantBuilder.attribute("BEST_MAPPINGS", scoreTable.bestScoreValueString());
                 }
                 newVariantBuilder.genotypes(
                         new GenotypeBuilder().name("sample")

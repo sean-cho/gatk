@@ -223,6 +223,24 @@ public class TemplateHaplotypeScoreTable implements Serializable {
         }
     }
 
+    public String bestScoreValueString() {
+        final StringBuilder stringBuilder = new StringBuilder();
+        for (int i = 0; i < templates.size(); i++) {
+            for (int j = 0; j < 2; j++) {
+                double best = Double.NEGATIVE_INFINITY;
+                for (int k = 0; k < haplotypes.size(); k++) {
+                    final OptionalDouble score = (j == 0 ? (mappingInfo[k][i].firstAlignmentScore) : (mappingInfo[k][i].secondAlignmentScore));
+                    if (score.isPresent() && score.getAsDouble() > best) {
+                        best = score.getAsDouble();
+                    }
+                }
+                stringBuilder.append((int) bestMappingScorePerFragment[i][j]).append(',');
+            }
+        }
+        if (stringBuilder.length() > 0) { stringBuilder.setLength(stringBuilder.length() -1); }
+        return stringBuilder.toString();
+    }
+
     public OptionalDouble getWorstAlignmentScore(final int templateIndex, final int fragmentIndex) {
         if (fragmentIndex != 0 && fragmentIndex != 1) {
             throw new IllegalArgumentException("currently only two fragments are supported");

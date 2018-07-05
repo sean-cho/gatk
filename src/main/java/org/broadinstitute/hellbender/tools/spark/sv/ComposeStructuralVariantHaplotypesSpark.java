@@ -628,7 +628,8 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
                 if (inZone) {
                     maxMQInZone = Math.max(maxMQInZone, interval.mapQual);
                 } else {
-                    maxMQOutOfZone = Math.max(maxMQOutOfZone, interval.mapQual);
+                   // result.add(0); break;
+                    //maxMQOutOfZone = Math.max(maxMQOutOfZone, interval.mapQual);
                 }
             }
             result.add(Math.max(0, maxMQInZone - maxMQOutOfZone));
@@ -769,10 +770,10 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
                 referenceScoreTagValue[i] = referenceScore.toString();
                 alternativeScoreTagValue[i] = alternativeScore.toString();
                 hpTagValue[i] = calculateHPTag(referenceScore.getPhredValue(), alternativeScore.getPhredValue());
-              //  hpQualTagValue[i] = Math.min(calculateHPQualTag(referenceScore.getPhredValue(),
-              //          alternativeScore.getPhredValue()), variantMappingQualities.get(i));
-                hpQualTagValue[i] = calculateHPQualTag(referenceScore.getPhredValue(),
-                                  alternativeScore.getPhredValue());
+                hpQualTagValue[i] = Math.min(calculateHPQualTag(referenceScore.getPhredValue(),
+                        alternativeScore.getPhredValue()), variantMappingQualities.get(i));
+              //  hpQualTagValue[i] = calculateHPQualTag(referenceScore.getPhredValue(),
+              //                    alternativeScore.getPhredValue());
             }
         }
 

@@ -12,7 +12,7 @@ public final class RealignmentScoreParameters implements Serializable {
     private static final long serialVersionUID = -1L;
 
 
-    public static final double DEFAULT_MATCH_COST = 0.01;
+    public static final double DEFAULT_MATCH_COST = 0;
     public static final double DEFAULT_MISMATCH_COST = 40;
     public static final double DEFAULT_GAP_OPEN_COST = 60;
     public static final double DEFAULT_GAP_EXTEND_COST = 10;

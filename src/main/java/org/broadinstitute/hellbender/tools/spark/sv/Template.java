@@ -138,60 +138,43 @@ public class Template implements Serializable {
     }
 
 
-    public int[] maximumMappingQuality(final SVIntervalTree<?> targetIntervals, SVIntervalLocator locator,
-                                       final InsertSizeDistribution insertSizeDistribution) {
+    public int[] fragmentMaximumMappingQualities(final SVIntervalTree<?> targetIntervals, SVIntervalLocator locator,
+                                                 final InsertSizeDistribution insertSizeDistribution) {
         final int[] result = new int[fragments.size()];
+        if (fragments.isEmpty()) {
+            return result;
+        }
         int definedMappingQualities = 0;
-        int maxQual = 0;
         for (int i = 0; i < result.length; i++) {
+            int maxInZoneQual = -1;
             final Fragment fragment = fragments.get(i);
-            result[i] = -1;
             for (final AlignmentInterval mappingInterval : fragment.alignmentIntervals()) {
-                if (!targetIntervals.hasOverlapper(locator.toSVInterval(mappingInterval.referenceSpan))) {
-                    result[i] = 0;
-                    definedMappingQualities++;
-                    break;
+                if (mappingInterval.mapQual == SAMRecord.UNKNOWN_MAPPING_QUALITY) continue;
+                //final int gap = targetIntervals.smallestGapLength(locator.toSVInterval(mappingInterval.referenceSpan));
+                //final boolean inZone = gap < insertSizeDistribution.maximum() + fragment.length;
+                final boolean inZone = targetIntervals.hasOverlapper(locator.toSVInterval(mappingInterval.referenceSpan));
+                if (inZone) {
+                    maxInZoneQual = Math.max(maxInZoneQual, mappingInterval.mapQual);
                 } else {
-                    if (result[i] == -1) {
-                        definedMappingQualities++;
-                    }
-                    result[i] = Math.max(result[i], mappingInterval.mapQual);
-                    if (result[i] > maxQual) {
-                        maxQual = result[i];
-                    }
+                    maxInZoneQual = 0; break;
                 }
             }
+            if (maxInZoneQual == -1) {
+                result[i] = maxInZoneQual;
+            } else {
+                definedMappingQualities++;
+                result[i] = Math.max(0, maxInZoneQual);
+            }
         }
-        if (definedMappingQualities == result.length) {
-            return result;
-        } else if (definedMappingQualities == 0) {
-            Arrays.fill(result, 10);
-            return result;
-        } else if (maxQual == 0) {
-            Arrays.fill(result, 0);
-            return result;
-        } else if (definedMappingQualities < fragments.size()) {
-            // int minGap = Integer.MAX_VALUE;
-            //final int readLength = fragments.stream().mapToInt(Fragment::length).min().getAsInt();
-            //for (int i = 0; i < result.length; i++) {
-            //    if (result[i] <= 0) continue;
-            //    minGap = Math.min(minGap, fragments.get(i).alignmentIntervals().stream()
-            //                                .mapToInt(ai -> targetIntervals.smallestGapLength(locator.toSVInterval(ai.referenceSpan)))
-            //                                .min().getAsInt());
-            //}
-            //final double logDistanceProbability = insertSizeDistribution.logCumulativeProbability(minGap + 2 * readLength);
-            //final double distancePenalty = -10.0 * MathUtils.log1mexp(logDistanceProbability) / Math.log(10);
-            //final int unmappedMappingQuality = (int) Math.max(0, maxQual - distancePenalty);
+        if (definedMappingQualities == 0) {
+            Arrays.fill(result, 60); // 10 default quals for totally unmapped pairs.
+        } else if (definedMappingQualities < result.length) {
+            final int maxQual = Arrays.stream(result).max().getAsInt();
             for (int i = 0; i < result.length; i++) {
-                if (result[i] == -1) {
-                    result[i] = maxQual;
-                }
+                if (result[i] == -1) result[i] = maxQual;
             }
-            return result;
-        } else {
-            return result;
         }
-
+        return result;
     }
 
 
