@@ -743,6 +743,7 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
         private final String[] alternativeScoreTagValue;
         private final String[] hpTagValue;
         private final double[] hpQualTagValue;
+        private final int[] mappingQuality;
 
         VariantHaplotypesAndContigsComposite(final RealignmentScoreParameters realignmentScoreParameters, final SVHaplotype referenceHaplotype, final SVHaplotype alternativeHaplotype,
                                              final List<AlignedContig> originalAlignment, final List<AlignedContig> referenceAlignedContigs,
@@ -759,6 +760,7 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
             this.alternativeScoreTagValue = new String[numberOfContigs];
             this.hpTagValue = new String[numberOfContigs];
             this.hpQualTagValue = new double[numberOfContigs];
+            this.mappingQuality = new int[numberOfContigs];
             for (int i = 0; i < numberOfContigs; i++) {
                 this.originalAlignments[i] = originalAlignment.get(i);
                 referenceAlignments[i] = referenceAlignedContigs.get(i);
@@ -772,7 +774,8 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
                 hpTagValue[i] = calculateHPTag(referenceScore.getPhredValue(), alternativeScore.getPhredValue());
                 hpQualTagValue[i] = Math.min(calculateHPQualTag(referenceScore.getPhredValue(),
                         alternativeScore.getPhredValue()), variantMappingQualities.get(i));
-              //  hpQualTagValue[i] = calculateHPQualTag(referenceScore.getPhredValue(),
+                mappingQuality[i] = variantMappingQualities.get(i);
+                //  hpQualTagValue[i] = calculateHPQualTag(referenceScore.getPhredValue(),
               //                    alternativeScore.getPhredValue());
             }
         }
@@ -789,6 +792,7 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
             this.referenceHaplotype = (SVHaplotype) kryo.readClassAndObject(input);
             this.alternativeHaplotype = (SVHaplotype) kryo.readClassAndObject(input);
             this.realignmentScoreParameters = (RealignmentScoreParameters) kryo.readClassAndObject(input);
+            this.mappingQuality = new int[numberOfContigs];
             for (int i = 0; i < numberOfContigs; i++) {
                 this.originalAlignments[i] = kryo.readObject(input, AlignedContig.class);
                 this.referenceAlignments[i] = kryo.readObject(input, AlignedContig.class);
@@ -797,6 +801,7 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
                 this.alternativeScoreTagValue[i] = input.readString();
                 this.hpTagValue[i] = input.readString();
                 this.hpQualTagValue[i] = input.readDouble();
+                this.mappingQuality[i] = input.readInt();
             }
         }
 
@@ -867,6 +872,7 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
             outputRecord.setAlignmentStart(vc.getStart());
             outputRecord.setMappingQuality(SAMRecord.NO_MAPPING_QUALITY);
             outputRecord.setReadUnmappedFlag(true);
+            outputRecord.setMappingQuality(mappingQuality[index]);
             return outputRecord;
         }
 
@@ -1053,6 +1059,7 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
                     output.writeString(object.alternativeScoreTagValue[i]);
                     output.writeString(object.hpTagValue[i]);
                     output.writeDouble(object.hpQualTagValue[i]);
+                    output.writeInt(object.mappingQuality[i]);
                 }
             }
 

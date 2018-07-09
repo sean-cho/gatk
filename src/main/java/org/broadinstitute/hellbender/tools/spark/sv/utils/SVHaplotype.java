@@ -257,6 +257,7 @@ public interface SVHaplotype {
         }
     }
 
+    int mappingQuality();
 
     String getVariantId();
 }

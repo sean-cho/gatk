@@ -68,7 +68,8 @@ public class SVContig extends ArraySVHaplotype {
         final RealignmentScore refScore = getOptionalAlignmentScore(read, ComposeStructuralVariantHaplotypesSpark.REFERENCE_SCORE_TAG, scoreParameters);
         final RealignmentScore altScore = getOptionalAlignmentScore(read, ComposeStructuralVariantHaplotypesSpark.ALTERNATIVE_SCORE_TAG, scoreParameters);
         final SimpleInterval location = new SimpleInterval(read.getAssignedContig(), read.getAssignedStart(), read.getAssignedStart());
-        return new SVContig(read.getName(), location, variantId, read.getBases(), refAln, refScore, altAln, altScore, qual);
+        final int mappingQuality = read.getMappingQuality();
+        return new SVContig(read.getName(), location, variantId, read.getBases(), refAln, refScore, altAln, altScore, mappingQuality, qual);
     }
 
     public List<AlignmentInterval> getReferenceAlignment() {
@@ -96,8 +97,8 @@ public class SVContig extends ArraySVHaplotype {
 
     public SVContig(final String name, final Locatable loc, final String variantId,
                     final byte[] bases, final List<AlignmentInterval> refAln, final RealignmentScore refScore,
-                    final List<AlignmentInterval> altAln, final RealignmentScore altScore, final Double qual) {
-        super(name, refAln, bases, variantId, SimpleInterval.of(loc), true);
+                    final List<AlignmentInterval> altAln, final RealignmentScore altScore, final int mappingQuality, final Double qual) {
+        super(name, refAln, bases, variantId, SimpleInterval.of(loc), mappingQuality, true);
         if (isReference() || isAlternative()) {
             throw new IllegalArgumentException("invalid assembled contig name, must not be reference or alternative like: " + name);
         }

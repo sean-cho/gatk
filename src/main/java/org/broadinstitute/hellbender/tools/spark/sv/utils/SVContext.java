@@ -245,7 +245,7 @@ public final class SVContext extends VariantContext {
                 SAMRecord.UNKNOWN_MAPPING_QUALITY, AlignmentInterval.NO_AS, AlignmentInterval.NO_NM, ContigAlignmentsModifier.AlnModType.NONE);
 
         final List<AlignmentInterval> intervals = Arrays.asList(firstInterval, secondInterval);
-        return new ArraySVHaplotype(SVHaplotype.ALT_HAPLOTYPE_NAME, intervals, sequence.toArray(), getID(), getStartPositionInterval(), false);
+        return new ArraySVHaplotype(SVHaplotype.ALT_HAPLOTYPE_NAME, intervals, sequence.toArray(), getID(), getStartPositionInterval(), 60, false);
     }
 
     private SVHaplotype composeShort55InversionHaplotype(ReferenceBases startReferenceBases, ReferenceBases endReferenceBases, byte[] insertedBases, int insertedBasesLength) {
@@ -280,7 +280,7 @@ public final class SVContext extends VariantContext {
                         new CigarElement(sequence.getLength() - suffixOffset, CigarOperator.M))), true,
                 SAMRecord.UNKNOWN_MAPPING_QUALITY, AlignmentInterval.NO_AS, AlignmentInterval.NO_NM, ContigAlignmentsModifier.AlnModType.NONE);
         final List<AlignmentInterval> intervals = Arrays.asList(firstInterval, inversionInterval, lastInterval);
-        return new ArraySVHaplotype(SVHaplotype.ALT_HAPLOTYPE_NAME, intervals, sequence.toArray(), getID(), getStartPositionInterval(), false);
+        return new ArraySVHaplotype(SVHaplotype.ALT_HAPLOTYPE_NAME, intervals, sequence.toArray(), getID(), getStartPositionInterval(), 60, false);
     }
 
     private SVHaplotype compose33InversionHaplotype(final ReferenceBases startReferenceBases,
@@ -326,7 +326,7 @@ public final class SVContext extends VariantContext {
                         new CigarElement(sequence.getLength() - suffixOffset, CigarOperator.M))), true,
                 SAMRecord.UNKNOWN_MAPPING_QUALITY, AlignmentInterval.NO_AS, AlignmentInterval.NO_NM, ContigAlignmentsModifier.AlnModType.NONE);
         final List<AlignmentInterval> intervals = Arrays.asList(firstInterval, inversionInterval, lastInterval);
-        return new ArraySVHaplotype(SVHaplotype.ALT_HAPLOTYPE_NAME, intervals, sequence.toArray(), getID(), getStartPositionInterval(), false);
+        return new ArraySVHaplotype(SVHaplotype.ALT_HAPLOTYPE_NAME, intervals, sequence.toArray(), getID(), getStartPositionInterval(), 60, false);
     }
 
     private SVHaplotype composeLong33InversionHaplotype(final ReferenceBases startReferenceBases,
@@ -354,7 +354,7 @@ public final class SVContext extends VariantContext {
                 SAMRecord.UNKNOWN_MAPPING_QUALITY, AlignmentInterval.NO_AS, AlignmentInterval.NO_NM, ContigAlignmentsModifier.AlnModType.NONE);
 
         final List<AlignmentInterval> intervals = Arrays.asList(firstInterval, secondInterval);
-        return new ArraySVHaplotype(SVHaplotype.ALT_HAPLOTYPE_NAME, intervals, sequence.toArray(), getID(), getStartPositionInterval(), false);
+        return new ArraySVHaplotype(SVHaplotype.ALT_HAPLOTYPE_NAME, intervals, sequence.toArray(), getID(), getStartPositionInterval(), 60, false);
     }
 
     private SVHaplotype composeReferenceHaplotype(final List<ReferenceBases> referenceBases) {
@@ -373,7 +373,7 @@ public final class SVContext extends VariantContext {
         final SimpleInterval startInterval = referenceBases.get(0).getInterval();
         return new ArraySVHaplotype(SVHaplotype.REF_HAPLOTYPE_NAME,
                 Collections.singletonList(new AlignmentInterval(startInterval.getContig(), startInterval.getStart(), true, cigar,
-                        SAMRecord.UNKNOWN_MAPPING_QUALITY, 0, AlignmentInterval.NO_AS)), bases, this.getUniqueID(), getStartPositionInterval(), false);
+                        SAMRecord.UNKNOWN_MAPPING_QUALITY, 0, AlignmentInterval.NO_AS)), bases, this.getUniqueID(), getStartPositionInterval(), 60, false);
     }
 
     /**
@@ -447,7 +447,7 @@ public final class SVContext extends VariantContext {
                 Collections.singletonList(new AlignmentInterval(getContig(),
                         beforeBases.getInterval().getStart(), true, cigar, SAMRecord.UNKNOWN_MAPPING_QUALITY, 0,
                         AlignmentInterval.NO_AS)),
-                sequence.toArray(), getUniqueID(), getStartPositionInterval(), false);
+                sequence.toArray(), getUniqueID(), getStartPositionInterval(), 60, false);
     }
 
     private SVHaplotype composeTandemDuplicationHaplotype(final ReferenceMultiSource reference, final int paddingSize, final List<ReferenceBases> referenceBasesList) {
@@ -478,7 +478,7 @@ public final class SVContext extends VariantContext {
                 ContigAlignmentsModifier.AlnModType.NONE);
 
         return new ArraySVHaplotype(SVHaplotype.ALT_HAPLOTYPE_NAME,
-                Collections.singletonList(alignmentInterval), sequenceBuilder.toArray(), getUniqueID(), getStartPositionInterval(), false);
+                Collections.singletonList(alignmentInterval), sequenceBuilder.toArray(), getUniqueID(), getStartPositionInterval(), 60, false);
     }
 
     private SVHaplotype composeInsertionHaplotype(final ReferenceMultiSource reference, final int paddingSize, final List<ReferenceBases> referenceBasesList) {
@@ -497,7 +497,7 @@ public final class SVContext extends VariantContext {
         final SimpleInterval referenceBasesInterval = referenceBases.getInterval();
         return new ArraySVHaplotype(SVHaplotype.ALT_HAPLOTYPE_NAME,
                 Collections.singletonList(new AlignmentInterval(referenceBasesInterval.getContig(), referenceBasesInterval.getStart(), true, cigar, SAMRecord.UNKNOWN_MAPPING_QUALITY, 0, AlignmentInterval.NO_AS)),
-                resultBases, getUniqueID(), getStartPositionInterval(), false);
+                resultBases, getUniqueID(), getStartPositionInterval(), 60, false);
     }
 
     /**

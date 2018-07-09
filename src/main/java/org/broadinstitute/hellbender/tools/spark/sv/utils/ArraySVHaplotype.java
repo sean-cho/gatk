@@ -26,8 +26,9 @@ public class ArraySVHaplotype extends AbstractSVHaplotype {
 
     protected final byte[] bases;
     protected final boolean isContig;
+    protected final int mappingQuality;
 
-    public ArraySVHaplotype(final String name, final List<AlignmentInterval> intervals, final byte[] bases, final String variantId, final SimpleInterval variantLocation, final boolean isContig) {
+    public ArraySVHaplotype(final String name, final List<AlignmentInterval> intervals, final byte[] bases, final String variantId, final SimpleInterval variantLocation, final int mappingQuality, final boolean isContig) {
         super(name, intervals, variantId, variantLocation);
         this.bases = bases;
         for (int i = 0; i < bases.length; i++) {
@@ -35,6 +36,7 @@ public class ArraySVHaplotype extends AbstractSVHaplotype {
                 throw new IllegalArgumentException("invalid base at " + i + " " + bases[i]);
             }
         }
+        this.mappingQuality = mappingQuality;
         this.isContig = isContig;
     }
 
@@ -44,6 +46,7 @@ public class ArraySVHaplotype extends AbstractSVHaplotype {
         final String variantId = read.getAttributeAsString("VC");
         final List<AlignmentInterval> saIntervals = read.hasAttribute("SA") ? AlignmentInterval.decodeList(read.getAttributeAsString("SA")) : Collections.emptyList();
         final List<AlignmentInterval> allIntervals;
+        final int mappingQuality = read.getMappingQuality();
         if (read.isUnmapped()) {
             allIntervals = saIntervals;
         } else {
@@ -52,7 +55,7 @@ public class ArraySVHaplotype extends AbstractSVHaplotype {
             allIntervals.addAll(saIntervals);
         }
         return new ArraySVHaplotype(read.getName(), allIntervals, bases, variantId,
-                new SimpleInterval(read.getAssignedContig(), read.getAssignedStart()), isContig);
+                new SimpleInterval(read.getAssignedContig(), read.getAssignedStart()), mappingQuality, isContig);
     }
 
     protected ArraySVHaplotype(final Kryo kryo, final Input input) {
@@ -60,6 +63,7 @@ public class ArraySVHaplotype extends AbstractSVHaplotype {
         final int length = input.readInt();
         this.bases = input.readBytes(length);
         this.isContig = input.readBoolean();
+        this.mappingQuality = input.readInt();
     }
 
     @Override
@@ -86,6 +90,11 @@ public class ArraySVHaplotype extends AbstractSVHaplotype {
         }
     }
 
+    @Override
+    public int mappingQuality() {
+        return mappingQuality;
+    }
+
     public static class Serializer<S extends ArraySVHaplotype> extends AbstractSVHaplotype.Serializer<S> {
 
         @Override
@@ -94,6 +103,7 @@ public class ArraySVHaplotype extends AbstractSVHaplotype {
             output.writeInt(object.bases.length);
             output.write(object.bases);
             output.writeBoolean(object.isContig);
+            output.writeInt(object.mappingQuality);
         }
 
         @Override

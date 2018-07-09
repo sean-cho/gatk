@@ -375,4 +375,8 @@ public final class SimpleInterval implements Locatable, Serializable {
              return new SimpleInterval(contig, start, start);
          }
      }
+
+     public boolean contains(int position) {
+         return position >= start && position <= end;
+     }
  }

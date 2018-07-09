@@ -627,11 +627,17 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     sampleLikelihoodsSecond.set(altIdx, t,
                             scoreTable.getMappingInfo(altHaplotypeIndex, t).secondAlignmentScore.orElse(0));
                 }
+                final Set<String> altContigNames = variant._1().getSupportingContigIds().stream()
+                        .collect(Collectors.toSet());
                 for (int h = 0; h < contigs.size(); h++) {
                     final SVContig contig = contigs.get(h);
                     final int mappingInfoIndex = haplotypes.indexOf(contig);
                     double haplotypeAltScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(altHaplotypeIndex).getBases(), contig.getBases(), contig.getAlternativeAlignment()).getLog10Prob();
                     double haplotypeRefScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(refHaplotypeIndex).getBases(), contig.getBases(), contig.getReferenceAlignment()).getLog10Prob();
+                    if (altContigNames.contains(contig.getName())) {
+                        haplotypeAltScore = 0;
+                        haplotypeRefScore = -60;
+                    }
                     final double maxMQ = contig.getMinimumMappingQuality();
                     final double base = Math.max(haplotypeAltScore, haplotypeRefScore);
                     haplotypeAltScore -= base;
@@ -644,6 +650,10 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     } else {
                         haplotypeRefScore = Math.max(haplotypeRefScore, haplotypeAltScore - 0.1 * maxMQ);
                     }
+                    if (haplotypeRefScore == haplotypeAltScore) {
+                        haplotypeAltScore = haplotypeRefScore = Double.NEGATIVE_INFINITY;
+                    }
+
                     // for each template we apply the scores thru the haplotype/contig `c`. We reduce/marginalize the likelihood
                     // to take the maximum across all haplotype/contigs for that template.
                     for (int t = 0; t < templates.size(); t++) {
@@ -724,8 +734,17 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     final int[] adi = new int[2];
                     int dpi = 0;
                         for (int t = 0; t < templates.size(); t++) {
+
                     final TemplateMappingInformation refMapping = scoreTable.getMappingInfo(refHaplotypeIndex, t);
                     final TemplateMappingInformation altMapping = scoreTable.getMappingInfo(altHaplotypeIndex, t);
+                    scoreTable.calculateBestMappingScores();
+                    //final int cap =
+                    //        Math.min((int) Math.min(scoreTable.bestMappingFragmentMQ[t][0], scoreTable.bestMappingFragmentMQ[t][1]),
+                    //                Math.min(mapQuals.get(t)[0], mapQuals.get(t)[1]));
+
+                    if (!refMapping.crossesBreakPoint(refBreakPoints) && !altMapping.crossesBreakPoint(altBreakPoints)) {
+                        continue;
+                    }
                     if (refMapping.pairOrientation.isProper() == altMapping.pairOrientation.isProper()) {
                         if (refMapping.pairOrientation.isProper() && (scoreTable.getMappingInfo(refHaplotypeIndex, t).crossesBreakPoint(refBreakPoints) || scoreTable.getMappingInfo(altHaplotypeIndex, t).crossesBreakPoint(altBreakPoints))) {
                             dpRelevant[t] = true;
@@ -740,19 +759,20 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                             }
                             if (Math.abs(phredDiff) > penalties.improperPairPenalty) {
                                 if (phredDiff > 0) {
-                                    altInsertSizeLog10Prob = refInsertSizeLog10Prob - 0.1 * penalties.improperPairPenalty;
+                                    altInsertSizeLog10Prob = refInsertSizeLog10Prob - 0.1 * Math.min(penalties.improperPairPenalty, 100000);
                                 } else {
-                                    refInsertSizeLog10Prob = altInsertSizeLog10Prob - 0.1 * penalties.improperPairPenalty;
+                                    refInsertSizeLog10Prob = altInsertSizeLog10Prob - 0.1 * Math.min(penalties.improperPairPenalty, 100000);
                                 }
                             }
                             sampleLikelihoods.set(refIdx, t, sampleLikelihoods.get(refIdx, t) + refInsertSizeLog10Prob);
                             sampleLikelihoods.set(altIdx, t, sampleLikelihoods.get(altIdx, t) + altInsertSizeLog10Prob);
                         }
-                    } else if (refMapping.pairOrientation.isProper()) {
-                          sampleLikelihoods.set(altIdx, t, sampleLikelihoods.get(altIdx, t) - 0.1 * penalties.improperPairPenalty);
-                    } else {
-                          sampleLikelihoods.set(refIdx, t, sampleLikelihoods.get(refIdx, t) - 0.1 * penalties.improperPairPenalty);
-                    }
+                        
+                   } else if (refMapping.pairOrientation.isProper()) {
+                          sampleLikelihoods.set(altIdx, t, sampleLikelihoods.get(altIdx, t) - 0.1 * Math.min(penalties.improperPairPenalty, 10000));
+                   } else {
+                          sampleLikelihoods.set(refIdx, t, sampleLikelihoods.get(refIdx, t) - 0.1 * Math.min(penalties.improperPairPenalty, 10000));
+                   }
                 }
                 int minRefPos = ref.getLength();
                 int maxRefPos = 0;

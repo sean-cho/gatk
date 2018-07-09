@@ -12,6 +12,7 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.read.CigarUtils;
+import org.broadinstitute.hellbender.utils.report.GATKReportColumnFormat;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -52,9 +53,9 @@ public class TemplateMappingInformation implements Serializable {
         if (firstIntervals.isEmpty() && secondIntervals.isEmpty()) {
             return new TemplateMappingInformation();
         } else if (secondIntervals.isEmpty()) {
-            return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals), unclippedStart(firstIntervals), unclippedEnd(firstIntervals), firstIntervals, true);
+            return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals), clippedStart(firstIntervals), clippedEnd(firstIntervals), firstIntervals, true);
         } else if (firstIntervals.isEmpty()) {
-            return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), unclippedStart(secondIntervals), unclippedEnd(secondIntervals), secondIntervals, false);
+            return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), clippedStart(secondIntervals), clippedEnd(secondIntervals), secondIntervals, false);
         } else {
             final Pair<List<AlignmentInterval>, List<AlignmentInterval>> sortedAlignments
                     = sortLeftRightAlignments(firstIntervals, secondIntervals);
@@ -63,12 +64,12 @@ public class TemplateMappingInformation implements Serializable {
             final ReadPairOrientation orientation = ReadPairOrientation.fromStrands(strands.getLeft(), strands.getRight());
             if (orientation.isProper()) {
                 return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals),
-                                                      score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), unclippedStart(sortedAlignments.getLeft()), unclippedEnd(sortedAlignments.getRight()),
+                                                      score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), clippedStart(sortedAlignments.getLeft()), clippedEnd(sortedAlignments.getRight()),
                         firstIntervals, secondIntervals,
                         unclippedEnd(sortedAlignments.getRight()) - unclippedStart(sortedAlignments.getLeft()));
             } else {
                 return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals),
-                        score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), unclippedStart(sortedAlignments.getLeft()), unclippedEnd(sortedAlignments.getRight()), firstIntervals, secondIntervals, orientation);
+                        score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), clippedStart(sortedAlignments.getLeft()), clippedEnd(sortedAlignments.getRight()), firstIntervals, secondIntervals, orientation);
             }
         }
     }
@@ -188,28 +189,6 @@ public class TemplateMappingInformation implements Serializable {
         if (minCoordinate > maxCoordinate) return false;
         for (final int breakPoint : breakPoints) {
             if (minCoordinate <= breakPoint && maxCoordinate >= breakPoint) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public boolean crossesBreakPoint(final int[] breakPoints, final int fragment) {
-        ParamUtils.inRange(fragment, 0, 1, "fragment out of range");
-        final List<AlignmentInterval> intervals = fragment == 0 ? firstAlignmentIntervals : secondAlignmentIntervals;
-        if (intervals == null || intervals.isEmpty()) return false;
-        int minCoordinate = Integer.MAX_VALUE;
-        int maxCoordinate = Integer.MIN_VALUE;
-        for (final AlignmentInterval ai : intervals) {
-            final SimpleInterval refSpan = ai.referenceSpan;
-            final Cigar cigar = ai.cigarAlongReference();
-            final int minRef = refSpan.getStart() - CigarUtils.countLeftClippedBases(cigar);
-            final int maxRef = refSpan.getEnd() + CigarUtils.countRightClippedBases(cigar);
-            if (minRef < minCoordinate) minCoordinate = minRef;
-            if (maxRef > maxCoordinate) maxCoordinate = maxRef;
-        }
-        for (final int breakPoint : breakPoints) {
-            if (breakPoint >= minCoordinate && breakPoint <= maxCoordinate) {
                 return true;
             }
         }
