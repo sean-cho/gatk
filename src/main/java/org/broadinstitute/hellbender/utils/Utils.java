@@ -1100,6 +1100,42 @@ public final class Utils {
         };
     }
 
+
+    /**
+     * Returns a unmodifiable collection that contains the elements of the two input collections
+     * in the same order.
+     * @param head the first input collection.
+     * @param tail the second input collection.
+     * @param <T> the element type.
+     * @return
+     */
+    public static <T> Collection<T> concat(final Collection<T> head, final Collection<T> tail) {
+        if ((head == null || head.isEmpty()) && (tail == null || tail.isEmpty())) {
+            return Collections.emptyList();
+        } else if ((head == null || head.isEmpty())) {
+            return Collections.unmodifiableCollection(tail);
+        } else if ((head == null || head.isEmpty())) {
+            return Collections.unmodifiableCollection(head);
+        } else {
+            return new AbstractCollection<T>() {
+                @Override
+                public Iterator<T> iterator() {
+                    return concatIterators(Arrays.asList(head, tail).iterator());
+                }
+
+                @Override
+                public int size() {
+                    return head.size() + tail.size();
+                }
+
+                @Override
+                public boolean contains(final Object obj) {
+                    return head.contains(obj) || tail.contains(obj);
+                }
+            };
+        }
+    }
+
     public static <T> Stream<T> stream(final Iterable<T> iterable) {
         Utils.nonNull(iterable);
         return StreamSupport.stream(iterable.spliterator(), false);

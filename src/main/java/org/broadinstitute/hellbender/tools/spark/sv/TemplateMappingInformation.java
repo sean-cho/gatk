@@ -3,6 +3,8 @@ package org.broadinstitute.hellbender.tools.spark.sv;
 import htsjdk.samtools.Cigar;
 import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
+import htsjdk.samtools.util.CollectionUtil;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignmentInterval;
@@ -203,6 +205,44 @@ public class TemplateMappingInformation implements Serializable {
                     .anyMatch(rs -> secondAlignmentIntervals.stream().map(ai -> ai.referenceSpan).anyMatch(rs2 -> rs2.overlaps(rs)));
         }
     }
+
+    public boolean crossesBreakPointCountingClippedBases(final int[] breakPoints) {
+        int minCoordinate = Integer.MAX_VALUE;
+        int maxCoordinate = 0;
+        for (final AlignmentInterval interval : Utils.concat(firstAlignmentIntervals, secondAlignmentIntervals)) {
+            final SimpleInterval referenceSpan = interval.referenceSpan;
+            final int minRefPos = referenceSpan.getStart() - CigarUtils.countLeftClippedBases(interval.cigarAlongReference());
+            final int maxRefPos = referenceSpan.getStart() - CigarUtils.countRightClippedBases(interval.cigarAlongReference());
+            if (minRefPos < minCoordinate) minCoordinate = minRefPos;
+            if (maxRefPos > maxCoordinate) maxCoordinate = maxRefPos;
+        }
+        for (final int breakPoint : breakPoints) {
+            if (breakPoint >= minCoordinate && breakPoint <= maxCoordinate) return true;
+        }
+        return false;
+    }
+
+    public int insertSizeCountingClippedBases() {
+        if (!pairOrientation.isProper()) {
+            return -1;
+        } else if (firstAlignmentIntervals == null || firstAlignmentIntervals.isEmpty()) {
+            return -1;
+        } else if (secondAlignmentIntervals == null || secondAlignmentIntervals.isEmpty()) {
+            return -1;
+        } else {
+            int minCoordinate = Integer.MAX_VALUE;
+            int maxCoordinate = 0;
+            for (final AlignmentInterval interval : Utils.concat(firstAlignmentIntervals, secondAlignmentIntervals)) {
+                final SimpleInterval referenceSpan = interval.referenceSpan;
+                final int minRefPos = referenceSpan.getStart() - CigarUtils.countLeftClippedBases(interval.cigarAlongReference());
+                final int maxRefPos = referenceSpan.getStart() - CigarUtils.countRightClippedBases(interval.cigarAlongReference());
+                if (minRefPos < minCoordinate) minCoordinate = minRefPos;
+                if (maxRefPos > maxCoordinate) maxCoordinate = maxRefPos;
+            }
+            return maxCoordinate - minCoordinate + 1;
+        }
+    }
+
 /*
     public double overlapMismatchesPenalty(final byte[] fragment1, final byte[] fragment2) {
         if (!fragmentsOverlapOnContig()) {

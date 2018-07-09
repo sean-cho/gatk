@@ -9,6 +9,7 @@ import htsjdk.samtools.SAMProgramRecord;
 import htsjdk.samtools.SAMReadGroupRecord;
 import htsjdk.samtools.SAMRecord;
 import htsjdk.samtools.SAMSequenceDictionary;
+import htsjdk.samtools.SamPairUtil;
 import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.GenotypeBuilder;
@@ -59,6 +60,7 @@ import org.broadinstitute.hellbender.utils.bwa.BwaMemAlignmentUtils;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemIndex;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemIndexCache;
 import org.broadinstitute.hellbender.utils.gcs.BamBucketIoUtils;
+import org.broadinstitute.hellbender.utils.genotyper.AlleleList;
 import org.broadinstitute.hellbender.utils.genotyper.IndexedAlleleList;
 import org.broadinstitute.hellbender.utils.genotyper.LikelihoodMatrix;
 import org.broadinstitute.hellbender.utils.genotyper.ReadLikelihoods;
@@ -493,7 +495,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                                 .flatMap(t -> t.fragments().stream())
                                 .map(Template.Fragment::bases)
                                 .collect(Collectors.toList());
-                final List<GATKRead> reads = templates.stream().map(t -> {
+                final List<GATKRead> templatesAsReads = templates.stream().map(t -> {
                             final SAMRecord record = new SAMRecord(header);
                             record.setReadName(t.name());
                             record.setReadUnmappedFlag(true);
@@ -600,19 +602,23 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     }
                 }
                 scoreTable.calculateBestMappingScores();
+                final AlleleList<GenotypingAllele> genotypingAlleles =  new IndexedAlleleList<>(refAllele, altAllele);
+                final SampleList sampleList = SampleList.singletonSampleList("sample");
+                final Map<String, List<GATKRead>> sampleTemplateAsReads = Collections.singletonMap(sampleList.getSample(0), templatesAsReads);
 
-                final ReadLikelihoods<GenotypingAllele> likelihoods = new ReadLikelihoods<>(SampleList.singletonSampleList("sample"),
-                        new IndexedAlleleList<>(refAllele, altAllele), Collections.singletonMap("sample", reads));
-                final ReadLikelihoods<GenotypingAllele> likelihoodsFirst = new ReadLikelihoods<>(SampleList.singletonSampleList("sample"),
-                                new IndexedAlleleList<>(refAllele, altAllele), Collections.singletonMap("sample", reads));
-                final ReadLikelihoods<GenotypingAllele> likelihoodsSecond = new ReadLikelihoods<>(SampleList.singletonSampleList("sample"),
-                                new IndexedAlleleList<>(refAllele, altAllele), Collections.singletonMap("sample", reads));
+                final ReadLikelihoods<GenotypingAllele> likelihoods = new ReadLikelihoods<>(sampleList,
+                        genotypingAlleles, sampleTemplateAsReads);
+                final ReadLikelihoods<GenotypingAllele> likelihoodsFirst = new ReadLikelihoods<>(sampleList,
+                        genotypingAlleles, sampleTemplateAsReads);
+                final ReadLikelihoods<GenotypingAllele> likelihoodsSecond = new ReadLikelihoods<>(sampleList,
+                        genotypingAlleles, sampleTemplateAsReads);
 
                 final LikelihoodMatrix<GenotypingAllele> sampleLikelihoods = likelihoods.sampleMatrix(0);
-                        final LikelihoodMatrix<GenotypingAllele> sampleLikelihoodsFirst = likelihoodsFirst.sampleMatrix(0);
-                        final LikelihoodMatrix<GenotypingAllele> sampleLikelihoodsSecond = likelihoodsSecond.sampleMatrix(0);
-
-                        sampleLikelihoods.fill(Double.NEGATIVE_INFINITY);
+                final LikelihoodMatrix<GenotypingAllele> sampleLikelihoodsFirst = likelihoodsFirst.sampleMatrix(0);
+                final LikelihoodMatrix<GenotypingAllele> sampleLikelihoodsSecond = likelihoodsSecond.sampleMatrix(0);
+                
+                sampleLikelihoods.fill(Double.NEGATIVE_INFINITY);
+                sampleLikelihoods.fill(Double.NEGATIVE_INFINITY);
                 final int refIdx = likelihoods.indexOfAllele(refAllele);
                 final int altIdx = likelihoods.indexOfAllele(altAllele);
                 final List<SVContig> contigs = haplotypes.stream().filter(SVHaplotype::isNeitherReferenceNorAlternative).map(SVContig.class::cast)
@@ -713,7 +719,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     //
                     // This might be resolved differently by ignoring short variant differences so that the Lk is totally
                     // defined by real SV variation and so the 3000 becomes closer to 0. Or that in general the 100 is actual
-                    // real difference rather that differences due to chance in the distribution of short variants between
+                    // real SV differences rather that differences due to chance in the distribution of short variants between
                     // contigs.
                     //if (sampleLikelihoodsFirst == sampleLikelihoodsSecond) debug00(sampleLikelihoodsFirst, sampleLikelihoodsSecond);
                     for (int k = 0; k < 2; k++) {
@@ -730,6 +736,9 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
 
                     }
                 }
+                
+                final ReadLikelihoods<GenotypingAllele> insertSizeLikelihoods = calculateInsertSizeLikelihoods(sampleList, genotypingAlleles, sampleTemplateAsReads, scoreTable, refBreakPoints, altBreakPoints, insertSizeDistribution);
+                final ReadLikelihoods<GenotypingAllele> discordantOrientationLikelihoods = calculateDiscordantOrientationLikelihoods(sampleList, genotypingAlleles, sampleTemplateAsReads, scoreTable, refBreakPoints, altBreakPoints, insertSizeDistribution);
 
                     final int[] adi = new int[2];
                     int dpi = 0;
@@ -768,9 +777,9 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                             sampleLikelihoods.set(altIdx, t, sampleLikelihoods.get(altIdx, t) + altInsertSizeLog10Prob);
                         }
                         
-                   } else if (refMapping.pairOrientation.isProper()) {
+                   } else if (refMapping.pairOrientation.isProper() && altMapping.pairOrientation.isDefined()) {
                           sampleLikelihoods.set(altIdx, t, sampleLikelihoods.get(altIdx, t) - 0.1 * Math.min(penalties.improperPairPenalty, 10000));
-                   } else {
+                   } else if (altMapping.pairOrientation.isProper() && altMapping.pairOrientation.isDefined()){
                           sampleLikelihoods.set(refIdx, t, sampleLikelihoods.get(refIdx, t) - 0.1 * Math.min(penalties.improperPairPenalty, 10000));
                    }
                 }
@@ -867,6 +876,57 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                 }
            }).iterator();
         });
+    }
+
+    private static ReadLikelihoods<GenotypingAllele> calculateDiscordantOrientationLikelihoods(final SampleList sampleList,
+                                                                                               final AlleleList<GenotypingAllele> genotypingAlleles,
+                                                                                               final Map<String,List<GATKRead>> sampleTemplateAsReads,
+                                                                                               final TemplateHaplotypeScoreTable scoreTable,
+                                                                                               final int[] refBreakPoints,
+                                                                                               final int[] altBreakPoints,
+                                                                                               final InsertSizeDistribution insertSizeDistribution) {
+        final ReadLikelihoods<GenotypingAllele> result = new ReadLikelihoods<>(sampleList, genotypingAlleles, sampleTemplateAsReads);
+        final LikelihoodMatrix<GenotypingAllele> matrix = result.sampleMatrix(0);
+        for (int t = 0; t < matrix.numberOfReads(); t++) {
+            final TemplateMappingInformation referenceMappingInfo = scoreTable.getMappingInfo(0, t);
+            final TemplateMappingInformation alternativeMappingInfo = scoreTable.getMappingInfo(1, t);
+            if (!referenceMappingInfo.pairOrientation.isDefined()) continue;
+            if (!alternativeMappingInfo.pairOrientation.isDefined()) continue;
+            if (referenceMappingInfo.pairOrientation.isProper() == alternativeMappingInfo.pairOrientation.isProper())
+                continue;
+            if (referenceMappingInfo.pairOrientation.isProper() && referenceMappingInfo.crossesBreakPointCountingClippedBases(refBreakPoints)) {
+                matrix.set(1, t, -2.0);
+            } else if (alternativeMappingInfo.pairOrientation.isProper() && alternativeMappingInfo.crossesBreakPointCountingClippedBases(altBreakPoints)) {
+                matrix.set(0, t, -2.0);
+            }
+        }
+        return result;
+    }
+
+    private static ReadLikelihoods<GenotypingAllele> calculateInsertSizeLikelihoods(final SampleList sampleList, final AlleleList<GenotypingAllele> genotypingAlleles,
+                                                                                    final Map<String,List<GATKRead>> sampleTemplateAsReads,
+                                                                                    final TemplateHaplotypeScoreTable scoreTable,
+                                                                                    final int[] refBreakPoints,
+                                                                                    final int[] altBreakPoints, final InsertSizeDistribution dist) {
+        final ReadLikelihoods<GenotypingAllele> result = new ReadLikelihoods<>(sampleList, genotypingAlleles, sampleTemplateAsReads);
+        final LikelihoodMatrix<GenotypingAllele> matrix = result.sampleMatrix(0);
+        for (int t = 0; t < matrix.numberOfReads(); t++) {
+            final TemplateMappingInformation referenceMappingInfo = scoreTable.getMappingInfo(0, t);
+            final TemplateMappingInformation alternativeMappingInfo = scoreTable.getMappingInfo(1, t);
+            if (!referenceMappingInfo.pairOrientation.isProper()) continue;
+            if (!alternativeMappingInfo.pairOrientation.isProper()) continue;
+            final boolean accrossBreakPointsOnRef = referenceMappingInfo.crossesBreakPointCountingClippedBases(refBreakPoints);
+            final boolean accrossBreakPointsOnAlt = alternativeMappingInfo.crossesBreakPointCountingClippedBases(altBreakPoints);
+            if (accrossBreakPointsOnAlt || accrossBreakPointsOnRef) {
+                final double refInsertSizeLk = dist.logProbability(referenceMappingInfo.insertSizeCountingClippedBases());
+                final double altInsertSizeLk = dist.logProbability(alternativeMappingInfo.insertSizeCountingClippedBases());
+                final double best = Math.max(refInsertSizeLk, altInsertSizeLk);
+                final double worst = best - 2.0;
+                matrix.set(0, t, Math.max(worst, refInsertSizeLk));
+                matrix.set(1, t, Math.max(worst, altInsertSizeLk));
+            }
+        }
+        return result;
     }
 
     private static int[] calculateBreakPoints(final SVHaplotype haplotype, final SVContext context, final SAMSequenceDictionary dictionary) {
