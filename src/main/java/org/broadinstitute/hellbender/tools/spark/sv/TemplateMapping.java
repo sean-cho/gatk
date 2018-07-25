@@ -1,10 +1,7 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
-import htsjdk.samtools.Cigar;
 import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
-import htsjdk.samtools.util.CollectionUtil;
-import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignmentInterval;
@@ -14,7 +11,6 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.read.CigarUtils;
-import org.broadinstitute.hellbender.utils.report.GATKReportColumnFormat;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -25,15 +21,15 @@ import java.util.OptionalInt;
 /**
  * Created by valentin on 6/9/17.
  */
-public class TemplateMappingInformation implements Serializable {
+public class TemplateMapping implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     private static final Comparator<List<AlignmentInterval>> LEFT_RIGHT_ALIGNMENT_COMPARATOR =
-            Comparator.comparingInt(TemplateMappingInformation::unclippedStart)
-                    .thenComparingInt(TemplateMappingInformation::unclippedEnd)
-                    .thenComparingInt(TemplateMappingInformation::clippedStart)
-                    .thenComparingInt(TemplateMappingInformation::clippedEnd);
+            Comparator.comparingInt(TemplateMapping::unclippedStart)
+                    .thenComparingInt(TemplateMapping::unclippedEnd)
+                    .thenComparingInt(TemplateMapping::clippedStart)
+                    .thenComparingInt(TemplateMapping::clippedEnd);
 
     public String name;
     public final ReadPairOrientation pairOrientation;
@@ -45,19 +41,19 @@ public class TemplateMappingInformation implements Serializable {
     public final int minCoordinate;
     public final int maxCoordinate;
 
-    public static TemplateMappingInformation fromAlignments(final RealignmentScoreParameters realignmentScoreParameters, final SVHaplotype haplotype,
-                                                            final byte[] firstBases, final List<AlignmentInterval> firstIntervals,
-                                                            final byte[] secondBases, final List<AlignmentInterval> secondIntervals) {
+    public static TemplateMapping fromAlignments(final RealignmentScoreParameters realignmentScoreParameters, final SVHaplotype haplotype,
+                                                 final byte[] firstBases, final List<AlignmentInterval> firstIntervals,
+                                                 final byte[] secondBases, final List<AlignmentInterval> secondIntervals) {
         Utils.nonNull(firstIntervals);
         Utils.nonNull(secondIntervals);
         ParamUtils.isPositive(firstBases.length, "the first length must be 1 or greater");
         ParamUtils.isPositive(secondBases.length, "the second length must be 1 or greater");
         if (firstIntervals.isEmpty() && secondIntervals.isEmpty()) {
-            return new TemplateMappingInformation();
+            return new TemplateMapping();
         } else if (secondIntervals.isEmpty()) {
-            return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals), clippedStart(firstIntervals), clippedEnd(firstIntervals), firstIntervals, true);
+            return new TemplateMapping(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals), clippedStart(firstIntervals), clippedEnd(firstIntervals), firstIntervals, true);
         } else if (firstIntervals.isEmpty()) {
-            return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), clippedStart(secondIntervals), clippedEnd(secondIntervals), secondIntervals, false);
+            return new TemplateMapping(score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), clippedStart(secondIntervals), clippedEnd(secondIntervals), secondIntervals, false);
         } else {
             final Pair<List<AlignmentInterval>, List<AlignmentInterval>> sortedAlignments
                     = sortLeftRightAlignments(firstIntervals, secondIntervals);
@@ -65,18 +61,18 @@ public class TemplateMappingInformation implements Serializable {
                     strand(sortedAlignments.getLeft()), strand(sortedAlignments.getRight()));
             final ReadPairOrientation orientation = ReadPairOrientation.fromStrands(strands.getLeft(), strands.getRight());
             if (orientation.isProper()) {
-                return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals),
+                return new TemplateMapping(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals),
                                                       score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), clippedStart(sortedAlignments.getLeft()), clippedEnd(sortedAlignments.getRight()),
                         firstIntervals, secondIntervals,
                         unclippedEnd(sortedAlignments.getRight()) - unclippedStart(sortedAlignments.getLeft()));
             } else {
-                return new TemplateMappingInformation(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals),
+                return new TemplateMapping(score(realignmentScoreParameters, haplotype, firstBases, firstIntervals),
                         score(realignmentScoreParameters, haplotype, secondBases, secondIntervals), clippedStart(sortedAlignments.getLeft()), clippedEnd(sortedAlignments.getRight()), firstIntervals, secondIntervals, orientation);
             }
         }
     }
 
-    public TemplateMappingInformation(final double firstAlignment, final double secondAlignment, final int minCoordinate, final int maxCoordinate, final List<AlignmentInterval> firstAlignmentIntervals, final List<AlignmentInterval> secondAlignmentIntervals, final ReadPairOrientation orientation) {
+    public TemplateMapping(final double firstAlignment, final double secondAlignment, final int minCoordinate, final int maxCoordinate, final List<AlignmentInterval> firstAlignmentIntervals, final List<AlignmentInterval> secondAlignmentIntervals, final ReadPairOrientation orientation) {
         Utils.nonNull(orientation);
         if (orientation.isProper()) {
             throw new IllegalArgumentException("you cannot create a mapping information object with proper orientation without indicating the insert size");
@@ -91,7 +87,7 @@ public class TemplateMappingInformation implements Serializable {
         this.maxCoordinate = maxCoordinate;
     }
 
-    public TemplateMappingInformation(final double alignment, final int minCoordinate, final int maxCoordinate, final List<AlignmentInterval> intervals, final boolean isFirst) {
+    public TemplateMapping(final double alignment, final int minCoordinate, final int maxCoordinate, final List<AlignmentInterval> intervals, final boolean isFirst) {
         if (isFirst) {
             firstAlignmentScore = OptionalDouble.of(alignment);
             firstAlignmentIntervals = intervals;
@@ -105,7 +101,7 @@ public class TemplateMappingInformation implements Serializable {
         this.maxCoordinate = maxCoordinate;
     }
 
-    public TemplateMappingInformation(final double firstAlignment, final double secondAlignment, final int minCoordinate, final int maxCoordinate,  final List<AlignmentInterval> firstIntervals, final List<AlignmentInterval> secondIntervals, final int insertSize) {
+    public TemplateMapping(final double firstAlignment, final double secondAlignment, final int minCoordinate, final int maxCoordinate, final List<AlignmentInterval> firstIntervals, final List<AlignmentInterval> secondIntervals, final int insertSize) {
         Utils.nonNull(firstAlignment);
         Utils.nonNull(secondAlignment);
         if (insertSize < 1) {
@@ -121,7 +117,7 @@ public class TemplateMappingInformation implements Serializable {
         this.maxCoordinate = maxCoordinate;
     }
 
-    public TemplateMappingInformation() {
+    public TemplateMapping() {
         firstAlignmentScore = OptionalDouble.empty();
         secondAlignmentScore = OptionalDouble.empty();
         insertSize = OptionalInt.empty();

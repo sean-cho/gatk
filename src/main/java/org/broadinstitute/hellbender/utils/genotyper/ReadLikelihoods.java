@@ -9,11 +9,6 @@ import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import org.apache.commons.collections.ListUtils;
 import org.apache.commons.math3.stat.descriptive.rank.Median;
-import org.broadinstitute.hellbender.tools.spark.sv.InsertSizeDistribution;
-import org.broadinstitute.hellbender.tools.spark.sv.SVContig;
-import org.broadinstitute.hellbender.tools.spark.sv.Template;
-import org.broadinstitute.hellbender.tools.spark.sv.TemplateMappingInformation;
-import org.broadinstitute.hellbender.tools.spark.sv.utils.SVHaplotype;
 import org.broadinstitute.hellbender.utils.IndexRange;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -25,7 +20,6 @@ import org.broadinstitute.hellbender.utils.read.GATKRead;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 /**
  * Read-likelihoods container implementation based on integer indexed arrays.

@@ -9,7 +9,6 @@ import htsjdk.samtools.SAMProgramRecord;
 import htsjdk.samtools.SAMReadGroupRecord;
 import htsjdk.samtools.SAMRecord;
 import htsjdk.samtools.SAMSequenceDictionary;
-import htsjdk.samtools.SamPairUtil;
 import htsjdk.samtools.util.Locatable;
 import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.GenotypeBuilder;
@@ -529,8 +528,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         final int refHaplotypeIndex = haplotypes.indexOf(ref);
                         final int altHaplotypeIndex = haplotypes.indexOf(alt);
 
-                        final TemplateHaplotypeScoreTable scoreTable =
-                                new TemplateHaplotypeScoreTable(templates, haplotypes);
+                        final TemplateMappingTable scoreTable =
+                                new TemplateMappingTable(templates, haplotypes);
                         for (int h = 0; h < haplotypes.size(); h++) {
                             final SVHaplotype haplotype = haplotypes.get(h);
 
@@ -560,7 +559,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                                 final List<AlignmentInterval> firstIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(firstAlignment, haplotypeName, template.fragments().get(0).length());
                                 final List<AlignmentInterval> secondIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(secondAlignment, haplotypeName, template.fragments().get(1).length());
 
-                                final TemplateMappingInformation mappingInformation = TemplateMappingInformation.fromAlignments(realignmentScoreArguments, haplotype,
+                                final TemplateMapping mappingInformation = TemplateMapping.fromAlignments(realignmentScoreArguments, haplotype,
                                         template.fragments().get(0).bases(), firstIntervals,
                                         template.fragments().get(1).bases(), secondIntervals);
                                 scoreTable.setMappingInfo(h, i, mappingInformation);
@@ -600,17 +599,12 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
 
                         //    resolve the missing mapping scores to the worst seen + a penalty.
                         for (int t = 0; t < templates.size(); t++) {
-
-                            final OptionalDouble worstFirstAlignmentScore = scoreTable.getWorstAlignmentScore(t, 0);
-                            if (worstFirstAlignmentScore.isPresent()) {
-                                final double missingAlignmentScore = worstFirstAlignmentScore.getAsDouble() - 0.1 * penalties.unmappedFragmentPenalty;
-                                scoreTable.applyMissingAlignmentScore(t, 0, missingAlignmentScore);
-                            }
-                            final OptionalDouble worstSecondAlignmentScore = scoreTable.getWorstAlignmentScore(t, 1);
-                            if (worstSecondAlignmentScore.isPresent()) {
-                                final double missingAlignmentScore = worstSecondAlignmentScore.getAsDouble() - 0.1 * penalties.unmappedFragmentPenalty;
-                                scoreTable.applyMissingAlignmentScore(t, 1, missingAlignmentScore);
-                            }
+                            final double worstFirstAlignmentScore = scoreTable.getWorstAlignmentScore(t, 0);
+                            final double firstMissingAlignmentScore = worstFirstAlignmentScore - 0.1 * penalties.unmappedFragmentPenalty;
+                            scoreTable.applyMissingAlignmentScore(t, 0, firstMissingAlignmentScore);
+                            final double worstSecondAlignmentScore = scoreTable.getWorstAlignmentScore(t, 1);
+                            final double secondMissingAlignmentScore = worstSecondAlignmentScore - 0.1 * penalties.unmappedFragmentPenalty;
+                            scoreTable.applyMissingAlignmentScore(t, 1, secondMissingAlignmentScore);
                         }
                         scoreTable.calculateBestMappingScores();
                         final AlleleList<GenotypingAllele> genotypingAlleles = new IndexedAlleleList<>(refAllele, altAllele);
@@ -628,7 +622,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         int minRefPos = ref.getLength();
                         int maxRefPos = 0;
                         for (int t = 0; t < scoreTable.numberOfTemplates(); t++) {
-                            final TemplateMappingInformation mappingInfo = scoreTable.getMappingInfo(refHaplotypeIndex, t);
+                            final TemplateMapping mappingInfo = scoreTable.getMappingInfo(refHaplotypeIndex, t);
                             if (mappingInfo.minCoordinate < minRefPos) {
                                 minRefPos = mappingInfo.minCoordinate;
                             }
@@ -686,7 +680,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         });
     }
 
-    private static ReadLikelihoods<GenotypingAllele> calculateSplitReadLikelihoods(AlignmentPenalties penalties, boolean ignoreReadsThatDontOverlapBreakingPoint, InsertSizeDistribution insertSizeDistribution, RealignmentScoreParameters realignmentScoreArguments, List<SVHaplotype> haplotypes, List<Template> templates, List<int[]> mapQuals, int[] refBreakPoints, int[] altBreakPoints, GenotypingAllele refAllele, GenotypingAllele altAllele, int refHaplotypeIndex, int altHaplotypeIndex, TemplateHaplotypeScoreTable scoreTable, AlleleList<GenotypingAllele> genotypingAlleles, SampleList sampleList, Map<String, List<GATKRead>> sampleTemplateAsReads, Set<String> altContigNames) {
+    private static ReadLikelihoods<GenotypingAllele> calculateSplitReadLikelihoods(AlignmentPenalties penalties, boolean ignoreReadsThatDontOverlapBreakingPoint, InsertSizeDistribution insertSizeDistribution, RealignmentScoreParameters realignmentScoreArguments, List<SVHaplotype> haplotypes, List<Template> templates, List<int[]> mapQuals, int[] refBreakPoints, int[] altBreakPoints, GenotypingAllele refAllele, GenotypingAllele altAllele, int refHaplotypeIndex, int altHaplotypeIndex, TemplateMappingTable scoreTable, AlleleList<GenotypingAllele> genotypingAlleles, SampleList sampleList, Map<String, List<GATKRead>> sampleTemplateAsReads, Set<String> altContigNames) {
         final ReadLikelihoods<GenotypingAllele> likelihoods = new ReadLikelihoods<>(sampleList,
                 genotypingAlleles, sampleTemplateAsReads);
         final ReadLikelihoods<GenotypingAllele> likelihoods2 = new ReadLikelihoods<>(sampleList,
@@ -811,7 +805,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                 final double base = Math.max(matrix.get(refIdx, j), matrix.get(altIdx, j));
                 final int maxIndex = matrix.get(refIdx, j) == base ? refIdx : altIdx;
                 final int minIndex = maxIndex == refIdx ? altIdx : refIdx;
-                matrix.set(minIndex, j, Math.min(matrix.get(maxIndex, j), matrix.get(minIndex, j) - scoreTable.getBestAlignmentScore(j, k).orElse(Double.NEGATIVE_INFINITY)));
+                matrix.set(minIndex, j, Math.min(matrix.get(maxIndex, j), matrix.get(minIndex, j) - scoreTable.getBestAlignmentScore(j, k)));
             }
             for (int i = 0; i < sampleLikelihoods.numberOfAlleles(); i++) {
                 sampleLikelihoods.set(i, j, (considerFirstFragment ? sampleLikelihoodsFirst.get(i, j) : 0) +
@@ -826,7 +820,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     private static ReadLikelihoods<GenotypingAllele> calculateDiscordantOrientationLikelihoods(final SampleList sampleList,
                                                                                                final AlleleList<GenotypingAllele> genotypingAlleles,
                                                                                                final Map<String, List<GATKRead>> sampleTemplateAsReads,
-                                                                                               final TemplateHaplotypeScoreTable scoreTable,
+                                                                                               final TemplateMappingTable scoreTable,
                                                                                                final int refHaplotypeIdx,
                                                                                                final int altHaplotypeIdx,
                                                                                                final int[] refBreakPoints,
@@ -835,8 +829,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         final ReadLikelihoods<GenotypingAllele> result = new ReadLikelihoods<>(sampleList, genotypingAlleles, sampleTemplateAsReads);
         final LikelihoodMatrix<GenotypingAllele> matrix = result.sampleMatrix(0);
         for (int t = 0; t < matrix.numberOfReads(); t++) {
-            final TemplateMappingInformation referenceMappingInfo = scoreTable.getMappingInfo(refHaplotypeIdx, t);
-            final TemplateMappingInformation alternativeMappingInfo = scoreTable.getMappingInfo(altHaplotypeIdx, t);
+            final TemplateMapping referenceMappingInfo = scoreTable.getMappingInfo(refHaplotypeIdx, t);
+            final TemplateMapping alternativeMappingInfo = scoreTable.getMappingInfo(altHaplotypeIdx, t);
             if (!referenceMappingInfo.pairOrientation.isDefined()) continue;
             if (!alternativeMappingInfo.pairOrientation.isDefined()) continue;
             if (referenceMappingInfo.pairOrientation.isProper() == alternativeMappingInfo.pairOrientation.isProper())
@@ -852,7 +846,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
 
     private static ReadLikelihoods<GenotypingAllele> calculateInsertSizeLikelihoods(final SampleList sampleList, final AlleleList<GenotypingAllele> genotypingAlleles,
                                                                                     final Map<String, List<GATKRead>> sampleTemplateAsReads,
-                                                                                    final TemplateHaplotypeScoreTable scoreTable,
+                                                                                    final TemplateMappingTable scoreTable,
                                                                                     final int refHaplotypeIdx,
                                                                                     final int altHaplotypeIdx,
                                                                                     final int[] refBreakPoints,
@@ -860,8 +854,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         final ReadLikelihoods<GenotypingAllele> result = new ReadLikelihoods<>(sampleList, genotypingAlleles, sampleTemplateAsReads);
         final LikelihoodMatrix<GenotypingAllele> matrix = result.sampleMatrix(0);
         for (int t = 0; t < matrix.numberOfReads(); t++) {
-            final TemplateMappingInformation referenceMappingInfo = scoreTable.getMappingInfo(refHaplotypeIdx, t);
-            final TemplateMappingInformation alternativeMappingInfo = scoreTable.getMappingInfo(altHaplotypeIdx, t);
+            final TemplateMapping referenceMappingInfo = scoreTable.getMappingInfo(refHaplotypeIdx, t);
+            final TemplateMapping alternativeMappingInfo = scoreTable.getMappingInfo(altHaplotypeIdx, t);
             if (!referenceMappingInfo.pairOrientation.isProper()) continue;
             if (!alternativeMappingInfo.pairOrientation.isProper()) continue;
             final boolean accrossBreakPointsOnRef = referenceMappingInfo.crossesBreakPoint(refBreakPoints);
