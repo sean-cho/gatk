@@ -601,14 +601,14 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         //    resolve the missing mapping scores to the worst seen + a penalty.
                         for (int t = 0; t < templates.size(); t++) {
 
-                            final OptionalDouble bestFirstAlignmentScore = scoreTable.getWorstAlignmentScore(t, 0);
-                            if (bestFirstAlignmentScore.isPresent()) {
-                                final double missingAlignmentScore = bestFirstAlignmentScore.getAsDouble() - 0.1 * penalties.unmappedFragmentPenalty;
+                            final OptionalDouble worstFirstAlignmentScore = scoreTable.getWorstAlignmentScore(t, 0);
+                            if (worstFirstAlignmentScore.isPresent()) {
+                                final double missingAlignmentScore = worstFirstAlignmentScore.getAsDouble() - 0.1 * penalties.unmappedFragmentPenalty;
                                 scoreTable.applyMissingAlignmentScore(t, 0, missingAlignmentScore);
                             }
-                            final OptionalDouble bestSecondAlignmentScore = scoreTable.getWorstAlignmentScore(t, 1);
-                            if (bestSecondAlignmentScore.isPresent()) {
-                                final double missingAlignmentScore = bestSecondAlignmentScore.getAsDouble() - 0.1 * penalties.unmappedFragmentPenalty;
+                            final OptionalDouble worstSecondAlignmentScore = scoreTable.getWorstAlignmentScore(t, 1);
+                            if (worstSecondAlignmentScore.isPresent()) {
+                                final double missingAlignmentScore = worstSecondAlignmentScore.getAsDouble() - 0.1 * penalties.unmappedFragmentPenalty;
                                 scoreTable.applyMissingAlignmentScore(t, 1, missingAlignmentScore);
                             }
                         }
@@ -811,7 +811,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                 final double base = Math.max(matrix.get(refIdx, j), matrix.get(altIdx, j));
                 final int maxIndex = matrix.get(refIdx, j) == base ? refIdx : altIdx;
                 final int minIndex = maxIndex == refIdx ? altIdx : refIdx;
-                matrix.set(minIndex, j, Math.min(matrix.get(maxIndex, j), matrix.get(minIndex, j) - scoreTable.bestMappingScorePerFragment[j][k]));
+                matrix.set(minIndex, j, Math.min(matrix.get(maxIndex, j), matrix.get(minIndex, j) - scoreTable.getBestAlignmentScore(j, k).orElse(Double.NEGATIVE_INFINITY)));
             }
             for (int i = 0; i < sampleLikelihoods.numberOfAlleles(); i++) {
                 sampleLikelihoods.set(i, j, (considerFirstFragment ? sampleLikelihoodsFirst.get(i, j) : 0) +

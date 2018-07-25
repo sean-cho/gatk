@@ -26,8 +26,11 @@ public class TemplateHaplotypeScoreTable implements Serializable {
 
     private final TemplateMappingInformation[][] mappingInfo;
 
-    public final double[][] bestMappingScorePerFragment;
-    public final double[][] bestMappingFragmentMQ;
+    private final double[][] bestMappingScorePerFragment;
+    private final double[][] bestMappingFragmentMQ;
+    private final double[][] worstMappingScorePerFragment;
+    private final double[][] worstMappingScoresFragmentMQ;
+    private boolean needsTocalculateBestMappingScores = true;
 
     private final double[][] values;
 
@@ -49,21 +52,6 @@ public class TemplateHaplotypeScoreTable implements Serializable {
         return result;
     }
 
-    public double minimumAlignmentScore() {
-        double result = 0;
-        for (final TemplateMappingInformation[] row : mappingInfo) {
-            for (final TemplateMappingInformation ti : row) {
-                if (ti == null)
-                    continue;
-                if (ti.firstAlignmentScore.isPresent() && ti.firstAlignmentScore.getAsDouble() > result)
-                    result = ti.firstAlignmentScore.getAsDouble();
-                if (ti.secondAlignmentScore.isPresent() && ti.secondAlignmentScore.getAsDouble() > result)
-                    result = ti.secondAlignmentScore.getAsDouble();
-            }
-        }
-        return result;
-    }
-
     public TemplateHaplotypeScoreTable(final Iterable<Template> templates, final Iterable<SVHaplotype> haplotypes)
     {
         this.templates = CollectionUtils.collect(templates, t -> t, new ArrayList<>(1000));
@@ -72,6 +60,8 @@ public class TemplateHaplotypeScoreTable implements Serializable {
         mappingInfo = new TemplateMappingInformation[this.haplotypes.size()][this.templates.size()];
         bestMappingScorePerFragment = new double[this.templates.size()][2];
         bestMappingFragmentMQ = new double[this.templates.size()][2];
+        worstMappingScorePerFragment = new double[this.templates.size()][2];
+        worstMappingScoresFragmentMQ = new double[this.templates.size()][2];
         this.templateIndex = composeTemplateIndex(this.templates);
     }
 
@@ -144,17 +134,6 @@ public class TemplateHaplotypeScoreTable implements Serializable {
         return haplotypes;
     }
 
-   // public String toString() {
-   //     final StringBuilder sb = new StringBuilder();
-   //     for (int i = 0; i < numberOfHaplotypes(); i++) {
-   //         sb.append(Arrays.toString(values[i]));
-   //         sb.append(", ");
-   //     }
-   //     if (sb.length() > 0) {
-   //         sb.setLength(sb.length() - 1);
-   //     }
-   //     return sb.toString();
-   // }
 
     public int[] informativeTemplateIndexes() {
         return IntStream.range(0, templates.size())
@@ -211,59 +190,51 @@ public class TemplateHaplotypeScoreTable implements Serializable {
     }
 
     public void calculateBestMappingScores() {
+        if (!needsTocalculateBestMappingScores) {
+            return;
+        }
         for (int i = 0; i < templates.size(); i++) {
             for (int j = 0; j < 2; j++) {
-                double best = Double.NEGATIVE_INFINITY;
-                double bestMq = Double.POSITIVE_INFINITY;
+                double best = Double.NaN;
+                double bestMq = Double.NaN;
+                double worst = Double.NaN;
+                double worstMq = Double.NaN;
                 for (int k = 0; k < haplotypes.size(); k++) {
                     final OptionalDouble score = (j == 0 ? (mappingInfo[k][i].firstAlignmentScore) : (mappingInfo[k][i].secondAlignmentScore));
-                    if (score.isPresent() && score.getAsDouble() > best) {
+                    if (score.isPresent() && (Double.isNaN(best) || score.getAsDouble() > best)) {
                         best = score.getAsDouble();
                         if (haplotypes.get(k).isContig()) {
                             bestMq = haplotypes.get(k).mappingQuality();
                         }
                     }
+                    if (score.isPresent() && (Double.isNaN(worst) || score.getAsDouble() < worst)) {
+                        worst = score.getAsDouble();
+                        if (haplotypes.get(k).isContig()) {
+                            worstMq = haplotypes.get(k).mappingQuality();
+                        }
+                    }
                 }
                 bestMappingScorePerFragment[i][j] = best;
                 bestMappingFragmentMQ[i][j] = bestMq;
+                worstMappingScorePerFragment[i][j] = worst;
+                worstMappingScoresFragmentMQ[i][j] = worstMq;
             }
         }
-    }
-
-    public String bestScoreValueString() {
-        final StringBuilder stringBuilder = new StringBuilder();
-        for (int i = 0; i < templates.size(); i++) {
-            for (int j = 0; j < 2; j++) {
-                double best = Double.NEGATIVE_INFINITY;
-                for (int k = 0; k < haplotypes.size(); k++) {
-                    final OptionalDouble score = (j == 0 ? (mappingInfo[k][i].firstAlignmentScore) : (mappingInfo[k][i].secondAlignmentScore));
-                    if (score.isPresent() && score.getAsDouble() > best) {
-                        best = score.getAsDouble();
-                    }
-                }
-                stringBuilder.append((int) bestMappingScorePerFragment[i][j]).append(',');
-            }
-        }
-        if (stringBuilder.length() > 0) { stringBuilder.setLength(stringBuilder.length() -1); }
-        return stringBuilder.toString();
+        needsTocalculateBestMappingScores = false;
     }
 
     public OptionalDouble getWorstAlignmentScore(final int templateIndex, final int fragmentIndex) {
-        if (fragmentIndex != 0 && fragmentIndex != 1) {
-            throw new IllegalArgumentException("currently only two fragments are supported");
-        }
-        double result = Double.NaN;
-        for (int h = 0; h < haplotypes.size(); h++) {
-            final TemplateMappingInformation info = this.mappingInfo[h][templateIndex];
-            final OptionalDouble score = fragmentIndex == 0 ? info.firstAlignmentScore : info.secondAlignmentScore;
-            if (Double.isNaN(result)) {
-                result = score.orElse(Double.NaN);
-            } else if (score.isPresent() && score.getAsDouble() < result) {
-                result = score.getAsDouble();
-            }
-        }
+        calculateBestMappingScores();
+        final double result = worstMappingScorePerFragment[templateIndex][fragmentIndex];
         return Double.isNaN(result) ? OptionalDouble.empty() : OptionalDouble.of(result);
     }
+
+    public OptionalDouble getBestAlignmentScore(final int templateIndex, final int fragmentIndex) {
+        calculateBestMappingScores();
+        final double result = bestMappingScorePerFragment[templateIndex][fragmentIndex];
+        return Double.isNaN(result) ? OptionalDouble.empty() : OptionalDouble.of(result);
+    }
+
 
     public void applyMissingAlignmentScore(final int template, final int fragment, final double missingAlignmentScore) {
         final OptionalDouble score = OptionalDouble.of(missingAlignmentScore);
