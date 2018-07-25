@@ -106,7 +106,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     public static final String INSERT_SIZE_DISTR_FULL_NAME = "insertSizeDistribution";
 
     private static final long serialVersionUID = 1L;
-    
+
     private final boolean ignoreReadsThatDontOverlapBreakingPoint = true;
 
     private final boolean ignoreTemplatesThatDontOverlapBreakingPoint = true;
@@ -251,7 +251,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         return haplotypes;
                     } else {
                         final Set<SVHaplotype> result = new LinkedHashSet<>(haplotypes.size());
-                        hapLoop: for (final SVHaplotype haplotype : haplotypes) {
+                        hapLoop:
+                        for (final SVHaplotype haplotype : haplotypes) {
                             if (haplotype.getName().equals("ref") || haplotype.getName().equals("alt")) {
                                 result.add(haplotype);
                             } else {
@@ -301,7 +302,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                                         .flatMap(i -> assemblyCollection.templates(i).stream())
                                         .distinct()
                                         .collect(Collectors.toList());
-                             //           .filter(tt -> tt.fragments().stream().map(f -> AlignmentInterval.encode(f.alignmentIntervals())).filter(s -> s.contains("chr10,2480")).count() > 0);
+                                //           .filter(tt -> tt.fragments().stream().map(f -> AlignmentInterval.encode(f.alignmentIntervals())).filter(s -> s.contains("chr10,2480")).count() > 0);
                                 final Stream<int[]> allTemplatesMaxMappingQualities = allTemplates.stream()
                                         .map(tt -> tt.fragmentMaximumMappingQualities(coveredReference, locator, insertSizeDistribution));
                                 return new Tuple2<>(t._1(), new Tuple3<>(t._2(),
@@ -341,7 +342,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     private SAMFileHeader composeOutputHeader(final SAMSequenceDictionary dictionary) {
         final SAMFileHeader inputHeader = this.getHeaderForReads();
         final SAMFileHeader outputHeader = inputHeader.clone();
-        final List<String> inputSamples  = inputHeader.getReadGroups().stream().map(rg -> rg.getSample()).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        final List<String> inputSamples = inputHeader.getReadGroups().stream().map(SAMReadGroupRecord::getSample).filter(Objects::nonNull).distinct().collect(Collectors.toList());
         final String hapAndCtgSample = inputSamples.size() == 1 ? inputSamples.get(0) : "<Unknown>";
         final SAMProgramRecord programRecord = new SAMProgramRecord(getProgramName());
         programRecord.setCommandLine(getCommandLine());
@@ -415,15 +416,15 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         for (int i = 0; i < result.length; i++) {
             final double one = left.get(0, i) + right.get(0, i);
             final double two = left.get(1, i) + right.get(1, i);
-            result[i] = StringUtils.join(new Object[] {left.get(0,i), right.get(0, i), left.get(1, i), right.get(1, i), left.get(0, i)  + right.get(0,i),
-                      left.get(1, i) + right.get(1, i), one - two, (one > two) ? - Math.min(0, two - 2 *one) : Math.min(0, one - 2* two)} ,   ",");
+            result[i] = StringUtils.join(new Object[]{left.get(0, i), right.get(0, i), left.get(1, i), right.get(1, i), left.get(0, i) + right.get(0, i),
+                    left.get(1, i) + right.get(1, i), one - two, (one > two) ? -Math.min(0, two - 2 * one) : Math.min(0, one - 2 * two)}, ",");
         }
         return result;
     }
 
     private JavaRDD<Call> processVariants(final JavaPairRDD<SVContext, Tuple3<Iterable<SVHaplotype>, Iterable<Template>, Iterable<int[]>>> input, final SAMFileHeader outputAlignmentHeader, final JavaSparkContext ctx) {
         final Broadcast<SAMSequenceDictionary> broadCastDictionary = ctx.broadcast(getReferenceSequenceDictionary());
-        final SerializableBiFunction<String, byte[], File> imageCreator =  GenotypeStructuralVariantsSpark::createTransientImageFile;
+        final SerializableBiFunction<String, byte[], File> imageCreator = GenotypeStructuralVariantsSpark::createTransientImageFile;
         final AlignmentPenalties penalties = this.penalties;
         final boolean ignoreReadsThatDontOverlapBreakingPoint = this.ignoreReadsThatDontOverlapBreakingPoint;
         final double informativeTemplateDifferencePhred = this.informativeTemplateDifferencePhred;
@@ -443,59 +444,69 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                     .sequential()
                     .filter(variant -> !Utils.isEmpty(variant._2()._1()))
                     .map(variant -> {
-                final long startTime = System.currentTimeMillis();
-                final List<Template> allTemplates = Utils.stream(variant._2()._2())
-                        .collect(Collectors.toList());
-                final List<int[]> allMapQuals = Utils.stream(variant._2()._3())
-                        .collect(Collectors.toList());
-                    if (variant._1().isInsertion()) {
-                        final int length = variant._1().getStructuralVariantLength();
-                        final double insertAverageSize = insertSizeDistribution.average();
-                        genotypeCalculator.setRelativeAlleleFrequency(new double[] { insertAverageSize, Math.min (2 * insertAverageSize, insertAverageSize + length) });
-                    } else if (variant._1().isDeletion()) {
-                        final double insertAverageSize = insertSizeDistribution.average();
-                        final int length = variant._1().getStructuralVariantLength();
-                        genotypeCalculator.setRelativeAlleleFrequency(new double[] { Math.min( insertAverageSize * 2, insertAverageSize + length), insertAverageSize });
-                    } else {
-                        genotypeCalculator.setRelativeAlleleFrequency(null); //reset to default uniform.
-                    }
-
-                        final List<Template> allInformativeTemplates = new ArrayList<>(allTemplates.size());
-                final List<int[]> allInformativeMapQuals = new ArrayList<>(allTemplates.size());
-                for (int i = 0; i < allTemplates.size(); i++) {
-                    for (final int mq : allMapQuals.get(i)) {
-                        if (mq > 0) {
-                            allInformativeMapQuals.add(allMapQuals.get(i));
-                            allInformativeTemplates.add(allTemplates.get(i));
-                            break;
+                        final long startTime = System.currentTimeMillis();
+                        final List<Template> allTemplates = Utils.stream(variant._2()._2())
+                                .collect(Collectors.toList());
+                        final List<int[]> allMapQuals = Utils.stream(variant._2()._3())
+                                .collect(Collectors.toList());
+                        final Set<String> templateNames = new LinkedHashSet<>(allTemplates.size());
+                        final List<Template> nonRepeatTemplates = new ArrayList<>(allTemplates.size());
+                        final List<int[]> nonRepeatAllMapQuals = new ArrayList<>(allMapQuals.size());
+                        for (int i = 0; i < allTemplates.size(); i++) {
+                            if (templateNames.add(allTemplates.get(i).name())) {
+                                nonRepeatTemplates.add(allTemplates.get(i));
+                                nonRepeatAllMapQuals.add(allMapQuals.get(i));
+                            }
                         }
-                    }
-                }
+
+                        if (variant._1().isInsertion()) {
+                            final int length = variant._1().getStructuralVariantLength();
+                            final double insertAverageSize = insertSizeDistribution.average();
+                            genotypeCalculator.setRelativeAlleleFrequency(new double[]{insertAverageSize, Math.min(2 * insertAverageSize, insertAverageSize + length)});
+                        } else if (variant._1().isDeletion()) {
+                            final double insertAverageSize = insertSizeDistribution.average();
+                            final int length = variant._1().getStructuralVariantLength();
+                            genotypeCalculator.setRelativeAlleleFrequency(new double[]{Math.min(insertAverageSize * 2, insertAverageSize + length), insertAverageSize});
+                        } else {
+                            genotypeCalculator.setRelativeAlleleFrequency(null); //reset to default uniform.
+                        }
+
+                        final List<Template> allInformativeTemplates = new ArrayList<>(nonRepeatTemplates.size());
+                        final List<int[]> allInformativeMapQuals = new ArrayList<>(nonRepeatAllMapQuals.size());
+                        for (int i = 0; i < nonRepeatTemplates.size(); i++) {
+                            for (final int mq : nonRepeatAllMapQuals.get(i)) {
+                                if (mq > 0) {
+                                    allInformativeMapQuals.add(nonRepeatAllMapQuals.get(i));
+                                    allInformativeTemplates.add(nonRepeatTemplates.get(i));
+                                    break;
+                                }
+                            }
+                        }
 
 
-                final List<SVHaplotype> haplotypes = Utils.stream(variant._2()._1())
-                        .collect(Collectors.toList());
+                        final List<SVHaplotype> haplotypes = Utils.stream(variant._2()._1())
+                                .collect(Collectors.toList());
 
-                final List<Template> templates;
-                final List<int[]> mapQuals;
-                if (allInformativeTemplates.size() <= 5000) {
-                   templates = allInformativeTemplates;
-                   mapQuals = allInformativeMapQuals;
-                } else {
-                    templates = new ArrayList<>(5000);
-                    mapQuals = new ArrayList<>(5000);
-                    final Random rdn = new Random(variant._1().getUniqueID().hashCode());
-                    for (int i = 0; i < 5000; i++) {
-                        final int idx = rdn.nextInt(allInformativeTemplates.size());
-                        templates.add(allInformativeTemplates.get(idx));
-                        mapQuals.add(allInformativeMapQuals.get(idx));
-                    }
-                }
-                final List<byte[]> sequences = templates.stream()
+                        final List<Template> templates;
+                        final List<int[]> mapQuals;
+                        if (allInformativeTemplates.size() <= 5000) {
+                            templates = allInformativeTemplates;
+                            mapQuals = allInformativeMapQuals;
+                        } else {
+                            templates = new ArrayList<>(5000);
+                            mapQuals = new ArrayList<>(5000);
+                            final Random rdn = new Random(variant._1().getUniqueID().hashCode());
+                            for (int i = 0; i < 5000; i++) {
+                                final int idx = rdn.nextInt(allInformativeTemplates.size());
+                                templates.add(allInformativeTemplates.get(idx));
+                                mapQuals.add(allInformativeMapQuals.get(idx));
+                            }
+                        }
+                        final List<byte[]> sequences = templates.stream()
                                 .flatMap(t -> t.fragments().stream())
                                 .map(Template.Fragment::bases)
                                 .collect(Collectors.toList());
-                final List<GATKRead> templatesAsReads = templates.stream().map(t -> {
+                        final List<GATKRead> templatesAsReads = templates.stream().map(t -> {
                             final SAMRecord record = new SAMRecord(header);
                             record.setReadName(t.name());
                             record.setReadUnmappedFlag(true);
@@ -503,400 +514,336 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                             record.setAlignmentStart(variant._1().getStart());
                             return new SAMRecordToGATKReadAdapter(record);
                         }).collect(Collectors.toList());
-                //if (true) {
-                //    final VariantContextBuilder newVariantBuilder = new VariantContextBuilder(variant._1());
-                //    newVariantBuilder.attribute("READ_COUNT", sequences.size());
-                //    newVariantBuilder.attribute("CONTIG_COUNT", haplotypes.size());
-                //    return SVContext.of(newVariantBuilder.make());
-                //}
-                final SVHaplotype ref = haplotypes.stream().filter(h -> h.getName().equals("ref")).findFirst().get();
-                final int[] refBreakPoints = calculateBreakPoints(ref, variant._1(), dictionary);
-                final SVHaplotype alt = haplotypes.stream().filter(h -> h.getName().equals("alt")).findFirst().get();
-                final int[] altBreakPoints = calculateBreakPoints(alt, variant._1(), dictionary);
-                final GenotypingAllele refAllele = GenotypingAllele.of(ref, variant._1());
-                final GenotypingAllele altAllele = GenotypingAllele.of(alt, variant._1());
-                final int refHaplotypeIndex = haplotypes.indexOf(ref);
-                final int altHaplotypeIndex = haplotypes.indexOf(alt);
+                        //if (true) {
+                        //    final VariantContextBuilder newVariantBuilder = new VariantContextBuilder(variant._1());
+                        //    newVariantBuilder.attribute("READ_COUNT", sequences.size());
+                        //    newVariantBuilder.attribute("CONTIG_COUNT", haplotypes.size());
+                        //    return SVContext.of(newVariantBuilder.make());
+                        //}
+                        final SVHaplotype ref = haplotypes.stream().filter(h -> h.getName().equals("ref")).findFirst().get();
+                        final int[] refBreakPoints = calculateBreakPoints(ref, variant._1(), dictionary);
+                        final SVHaplotype alt = haplotypes.stream().filter(h -> h.getName().equals("alt")).findFirst().get();
+                        final int[] altBreakPoints = calculateBreakPoints(alt, variant._1(), dictionary);
+                        final GenotypingAllele refAllele = GenotypingAllele.of(ref, variant._1());
+                        final GenotypingAllele altAllele = GenotypingAllele.of(alt, variant._1());
+                        final int refHaplotypeIndex = haplotypes.indexOf(ref);
+                        final int altHaplotypeIndex = haplotypes.indexOf(alt);
 
-                final TemplateHaplotypeScoreTable scoreTable =
-                        new TemplateHaplotypeScoreTable(templates, haplotypes);
-                  for (int h = 0; h < haplotypes.size(); h++) {
-                    final SVHaplotype haplotype = haplotypes.get(h);
+                        final TemplateHaplotypeScoreTable scoreTable =
+                                new TemplateHaplotypeScoreTable(templates, haplotypes);
+                        for (int h = 0; h < haplotypes.size(); h++) {
+                            final SVHaplotype haplotype = haplotypes.get(h);
 
-                    final boolean isContig = haplotype.isNeitherReferenceNorAlternative();
+                            final boolean isContig = haplotype.isNeitherReferenceNorAlternative();
 
-                    final String imageName = isContig
-                            ? haplotype.getName()
-                            : variant._1().getUniqueID() + "/" + haplotype.getName();
-                    final File imageFile =
-                            imagesByName.computeIfAbsent(imageName, (in) -> imageCreator.apply(in, haplotype.getBases()));
-                    final BwaMemIndex index = BwaMemIndexCache.getInstance(imageFile.toString());
-                    final BwaMemAligner aligner = new BwaMemAligner(index);
-                    aligner.alignPairs();
-                    aligner.dontInferPairEndStats();
-                    // Interestingly it turns out that either allow bwa to infer the insert size or provide yoursel
-                    // results in reducced accuracy!!! I think that this and indication that is best not to try t
-                    // recover with SW unmapped mates as perhaps their alignment will always be relative poor and just "mud the already muddy waters"
-                    //aligner.setProperPairEndStats(new BwaMemPairEndStats(insertSizeDistribution.average(),
-                    //        insertSizeDistribution.stddev(), insertSizeDistribution.quantile(0.01),
-                    //        insertSizeDistribution.quantile(0.99)));
-                    final List<List<BwaMemAlignment>> alignments = aligner.alignSeqs(sequences);
-                    final IntFunction<String> haplotypeName = i -> i == 0 ? haplotype.getName() : null;
-                    for (int i = 0; i < templates.size(); i++) {
-                        final Template template = templates.get(i);
-                        final List<BwaMemAlignment> firstAlignment = alignments.get(i * 2);
-                        final List<BwaMemAlignment> secondAlignment = alignments.get(i * 2 + 1);
-                        final List<AlignmentInterval> firstIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(firstAlignment, haplotypeName, template.fragments().get(0).length());
-                        final List<AlignmentInterval> secondIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(secondAlignment, haplotypeName, template.fragments().get(1).length());
+                            final String imageName = isContig
+                                    ? haplotype.getName()
+                                    : variant._1().getUniqueID() + "/" + haplotype.getName();
+                            final File imageFile =
+                                    imagesByName.computeIfAbsent(imageName, (in) -> imageCreator.apply(in, haplotype.getBases()));
+                            final BwaMemIndex index = BwaMemIndexCache.getInstance(imageFile.toString());
+                            final BwaMemAligner aligner = new BwaMemAligner(index);
+                            aligner.alignPairs();
+                            aligner.dontInferPairEndStats();
+                            // Interestingly it turns out that either allow bwa to infer the insert size or provide yoursel
+                            // results in reducced accuracy!!! I think that this and indication that is best not to try t
+                            // recover with SW unmapped mates as perhaps their alignment will always be relative poor and just "mud the already muddy waters"
+                            //aligner.setProperPairEndStats(new BwaMemPairEndStats(insertSizeDistribution.average(),
+                            //        insertSizeDistribution.stddev(), insertSizeDistribution.quantile(0.01),
+                            //        insertSizeDistribution.quantile(0.99)));
+                            final List<List<BwaMemAlignment>> alignments = aligner.alignSeqs(sequences);
+                            final IntFunction<String> haplotypeName = i -> i == 0 ? haplotype.getName() : null;
+                            for (int i = 0; i < templates.size(); i++) {
+                                final Template template = templates.get(i);
+                                final List<BwaMemAlignment> firstAlignment = alignments.get(i * 2);
+                                final List<BwaMemAlignment> secondAlignment = alignments.get(i * 2 + 1);
+                                final List<AlignmentInterval> firstIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(firstAlignment, haplotypeName, template.fragments().get(0).length());
+                                final List<AlignmentInterval> secondIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(secondAlignment, haplotypeName, template.fragments().get(1).length());
 
-                        final TemplateMappingInformation mappingInformation = TemplateMappingInformation.fromAlignments(realignmentScoreArguments, haplotype,
-                                template.fragments().get(0).bases(), firstIntervals,
-                                template.fragments().get(1).bases(), secondIntervals);
-                        scoreTable.setMappingInfo(h, i, mappingInformation);
-                    }
-                }
-
-                for (int t = 0; t < templates.size(); t++) {
-                      for (int f = 0; f < 2; f++) {
-                          final List<AlignmentInterval> newRefMapping = f == 0
-                                  ? scoreTable.getMappingInfo(refHaplotypeIndex, t).firstAlignmentIntervals
-                                  : scoreTable.getMappingInfo(refHaplotypeIndex, t).secondAlignmentIntervals;
-                          if (newRefMapping == null || newRefMapping.isEmpty()) {
-                              continue;
-                          }
-                          final Template.Fragment fragment = templates.get(t).fragments().get(f);
-                          final List<AlignmentInterval> oldRefMapping = fragment.alignmentIntervals();
-                          if (oldRefMapping == null || oldRefMapping.isEmpty()) {
-                              continue;
-                          }
-                          if (newRefMapping.size() != oldRefMapping.size()) {
-                              mapQuals.get(t)[f] = 0;
-                          } else {
-                              for (final AlignmentInterval newInterval : newRefMapping) {
-                                  if (!oldRefMapping.stream().anyMatch(old ->
-                                          old.startInAssembledContig == newInterval.startInAssembledContig
-                                        && old.endInAssembledContig == newInterval.endInAssembledContig
-                                        && CigarUtils.equals(old.cigarAlong5to3DirectionOfContig, newInterval.cigarAlong5to3DirectionOfContig)
-                                        && old.referenceSpan.getContig().equals(haplotypes.get(refHaplotypeIndex).getReferenceSpan().getContig())
-                                        && old.referenceSpan.getStart() == haplotypes.get(refHaplotypeIndex).getReferenceSpan().getStart() + newInterval.referenceSpan.getStart() - 1)) {
-                                      mapQuals.get(t)[f] = 0;
-                                      break;
-                                  }
-                              }
-                          }
-                      }
-                }
-
-             //    resolve the missing mapping scores to the worst seen + a penalty.
-                for (int t = 0; t < templates.size(); t++) {
-
-                    final OptionalDouble bestFirstAlignmentScore = scoreTable.getWorstAlignmentScore(t, 0);
-                    if (bestFirstAlignmentScore.isPresent()) {
-                        final double missingAlignmentScore = bestFirstAlignmentScore.getAsDouble() - 0.1 * penalties.unmappedFragmentPenalty;
-                        scoreTable.applyMissingAlignmentScore(t, 0, missingAlignmentScore);
-                    }
-                    final OptionalDouble bestSecondAlignmentScore = scoreTable.getWorstAlignmentScore(t, 1);
-                    if (bestSecondAlignmentScore.isPresent()) {
-                        final double missingAlignmentScore = bestSecondAlignmentScore.getAsDouble() - 0.1 * penalties.unmappedFragmentPenalty;
-                        scoreTable.applyMissingAlignmentScore(t, 1, missingAlignmentScore);
-                    }
-                }
-                scoreTable.calculateBestMappingScores();
-                final AlleleList<GenotypingAllele> genotypingAlleles =  new IndexedAlleleList<>(refAllele, altAllele);
-                final SampleList sampleList = SampleList.singletonSampleList("sample");
-                final Map<String, List<GATKRead>> sampleTemplateAsReads = Collections.singletonMap(sampleList.getSample(0), templatesAsReads);
-
-                final ReadLikelihoods<GenotypingAllele> likelihoods = new ReadLikelihoods<>(sampleList,
-                        genotypingAlleles, sampleTemplateAsReads);
-                final ReadLikelihoods<GenotypingAllele> likelihoodsFirst = new ReadLikelihoods<>(sampleList,
-                        genotypingAlleles, sampleTemplateAsReads);
-                final ReadLikelihoods<GenotypingAllele> likelihoodsSecond = new ReadLikelihoods<>(sampleList,
-                        genotypingAlleles, sampleTemplateAsReads);
-
-                final LikelihoodMatrix<GenotypingAllele> sampleLikelihoods = likelihoods.sampleMatrix(0);
-                final LikelihoodMatrix<GenotypingAllele> sampleLikelihoodsFirst = likelihoodsFirst.sampleMatrix(0);
-                final LikelihoodMatrix<GenotypingAllele> sampleLikelihoodsSecond = likelihoodsSecond.sampleMatrix(0);
-                
-                sampleLikelihoods.fill(Double.NEGATIVE_INFINITY);
-                sampleLikelihoods.fill(Double.NEGATIVE_INFINITY);
-                final int refIdx = likelihoods.indexOfAllele(refAllele);
-                final int altIdx = likelihoods.indexOfAllele(altAllele);
-                final List<SVContig> contigs = haplotypes.stream().filter(SVHaplotype::isNeitherReferenceNorAlternative).map(SVContig.class::cast)
-                        .collect(Collectors.toList());
-                for (int t = 0; t < templates.size(); t++) {
-                    sampleLikelihoodsFirst.set(refIdx, t,
-                            scoreTable.getMappingInfo(refHaplotypeIndex, t).firstAlignmentScore.orElse(0));
-                    sampleLikelihoodsSecond.set(refIdx, t,
-                            scoreTable.getMappingInfo(refHaplotypeIndex, t).secondAlignmentScore.orElse(0));
-                    sampleLikelihoodsFirst.set(altIdx, t,
-                            scoreTable.getMappingInfo(altHaplotypeIndex, t).firstAlignmentScore.orElse(0));
-                    sampleLikelihoodsSecond.set(altIdx, t,
-                            scoreTable.getMappingInfo(altHaplotypeIndex, t).secondAlignmentScore.orElse(0));
-                }
-                final Set<String> altContigNames = variant._1().getSupportingContigIds().stream()
-                        .collect(Collectors.toSet());
-                for (int h = 0; h < contigs.size(); h++) {
-                    final SVContig contig = contigs.get(h);
-                    final int mappingInfoIndex = haplotypes.indexOf(contig);
-                    double haplotypeAltScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(altHaplotypeIndex).getBases(), contig.getBases(), contig.getAlternativeAlignment()).getLog10Prob();
-                    double haplotypeRefScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(refHaplotypeIndex).getBases(), contig.getBases(), contig.getReferenceAlignment()).getLog10Prob();
-                    if (altContigNames.contains(contig.getName())) {
-                        haplotypeAltScore = 0;
-                        haplotypeRefScore = -60;
-                    }
-                    final double maxMQ = contig.getMinimumMappingQuality();
-                    final double base = Math.max(haplotypeAltScore, haplotypeRefScore);
-                    haplotypeAltScore -= base;
-                    haplotypeRefScore -= base;
-                    // we cap the difference of scores by the contig mapping quality.
-                    // so that contigs that could map in several places in the genome has less weight when assigning
-                    // genotypes.
-                    if (haplotypeAltScore < haplotypeRefScore) {
-                        haplotypeAltScore = Math.max(haplotypeAltScore, haplotypeRefScore - 0.1 * maxMQ);
-                    } else {
-                        haplotypeRefScore = Math.max(haplotypeRefScore, haplotypeAltScore - 0.1 * maxMQ);
-                    }
-                    if (haplotypeRefScore == haplotypeAltScore) {
-                        haplotypeAltScore = haplotypeRefScore = Double.NEGATIVE_INFINITY;
-                    }
-
-                    // for each template we apply the scores thru the haplotype/contig `c`. We reduce/marginalize the likelihood
-                    // to take the maximum across all haplotype/contigs for that template.
-                    for (int t = 0; t < templates.size(); t++) {
-                        final boolean noAlignment = !scoreTable.getMappingInfo(mappingInfoIndex, t).firstAlignmentScore.isPresent()
-                                && !scoreTable.getMappingInfo(mappingInfoIndex, t).secondAlignmentScore.isPresent();
-                        if (noAlignment) continue;
-                        final double firstMappingScore = scoreTable.getMappingInfo(mappingInfoIndex, t).firstAlignmentScore.orElse(Double.NEGATIVE_INFINITY);
-                        final double secondMappingScore = scoreTable.getMappingInfo(mappingInfoIndex, t).secondAlignmentScore.orElse(Double.NEGATIVE_INFINITY);
-                            sampleLikelihoodsFirst.set(refIdx, t,
-                                    Math.max(firstMappingScore + haplotypeRefScore, sampleLikelihoodsFirst.get(refIdx, t)));
-                            sampleLikelihoodsFirst.set(altIdx, t,
-                                    Math.max(firstMappingScore + haplotypeAltScore, sampleLikelihoodsFirst.get(altIdx, t)));
-                            sampleLikelihoodsSecond.set(refIdx, t,
-                                    Math.max(secondMappingScore + haplotypeRefScore, sampleLikelihoodsSecond.get(refIdx, t)));
-                            sampleLikelihoodsSecond.set(altIdx, t,
-                                    Math.max(secondMappingScore + haplotypeAltScore, sampleLikelihoodsSecond.get(altIdx, t)));
-                    }
-                }
-                // we cap the likelihood difference for each allele haplotypes for each fragment in each template by th
-                // mapping quality of the fragment so that those reads that may map to other locations in the genome count less
-                // towards genotyping.
-                for (int t = 0; t < templates.size(); t++) {
-                    for (int f = 0; f < 2; f++) {
-                        final int maxMq = mapQuals.get(t)[f];
-                        final LikelihoodMatrix<GenotypingAllele> matrix = f == 0 ? sampleLikelihoodsFirst : sampleLikelihoodsSecond;
-                        final double base = Math.max(matrix.get(refIdx, t), matrix.get(altIdx, t));
-                        final int maxIndex = matrix.get(refIdx, t) == base ? refIdx : altIdx;
-                        final int minIndex = maxIndex == refIdx ? altIdx : refIdx;
-                        matrix.set(minIndex, t, Math.max(matrix.get(maxIndex, t) - 0.1 * maxMq, matrix.get(minIndex, t)));
-                    }
-                }
-
-                // we check what templates are relevant toward genotyping, by default only those that map across a break point.
-                final boolean[] dpRelevant = new boolean[sampleLikelihoods.numberOfReads()];
-
-                for (int j = 0; j < sampleLikelihoods.numberOfReads(); j++) {
-                    boolean considerFirstFragment = true;
-                    boolean considerSecondFragment = true;
-                    if (ignoreReadsThatDontOverlapBreakingPoint) {
-                        considerFirstFragment = scoreTable.getMappingInfo(refHaplotypeIndex, j).crossesBreakPoint(refBreakPoints)
-                                || scoreTable.getMappingInfo(altHaplotypeIndex, j).crossesBreakPoint(altBreakPoints);
-                        considerSecondFragment = scoreTable.getMappingInfo(refHaplotypeIndex, j).crossesBreakPoint(refBreakPoints)
-                                || scoreTable.getMappingInfo(altHaplotypeIndex, j).crossesBreakPoint(altBreakPoints);
-                    }
-
-                    //TODO  the following adjustment seem to increase accuracy but the maths are a bit sketchy so for now I
-                    //include it.
-                    // The idea is to penalize poorly modeled reads... those that allele haplotype likelihood difference is not
-                    // much larger than the magnitude of the likelihood of the best allele likelihood.
-                    // so for example a template fragment has lks Phred 3000 3100, there is 100 diff in Lk but is very small
-                    // when compare to how unlikely the read is even with the best haplotype (3000) so is 100 even relevant?
-                    // The code simply substract 3000 to those 100 (min 0) so in the end such a read to be of any value for Lk
-                    // calculation the worst allele lk would need to be at least 6000.
-                    //
-                    // at first may seem a reasonable thing to do but it it unclear how to weight down these reads... just take
-                    // the best lk seems arbitrary.
-                    //
-                    // This might be resolved differently by ignoring short variant differences so that the Lk is totally
-                    // defined by real SV variation and so the 3000 becomes closer to 0. Or that in general the 100 is actual
-                    // real SV differences rather that differences due to chance in the distribution of short variants between
-                    // contigs.
-                    //if (sampleLikelihoodsFirst == sampleLikelihoodsSecond) debug00(sampleLikelihoodsFirst, sampleLikelihoodsSecond);
-                    for (int k = 0; k < 2; k++) {
-                        final LikelihoodMatrix<GenotypingAllele> matrix = k == 0 ? sampleLikelihoodsFirst : sampleLikelihoodsSecond;
-                        final double base = Math.max(matrix.get(refIdx, j), matrix.get(altIdx, j));
-                        final int maxIndex = matrix.get(refIdx, j) == base ? refIdx : altIdx;
-                        final int minIndex = maxIndex == refIdx ? altIdx : refIdx;
-                        matrix.set(minIndex, j, Math.min(matrix.get(maxIndex, j), matrix.get(minIndex, j) - scoreTable.bestMappingScorePerFragment[j][k]));
-                    }
-                    dpRelevant[j] = considerFirstFragment || considerSecondFragment;
-                    for (int i = 0; i < sampleLikelihoods.numberOfAlleles(); i++) {
-                        sampleLikelihoods.set(i, j, (considerFirstFragment ? sampleLikelihoodsFirst.get(i, j) : 0) +
-                                ((considerSecondFragment) ? sampleLikelihoodsSecond.get(i, j) : 0));
-
-                    }
-                }
-                
-                final ReadLikelihoods<GenotypingAllele> insertSizeLikelihoods = calculateInsertSizeLikelihoods(sampleList, genotypingAlleles, sampleTemplateAsReads, scoreTable, refBreakPoints, altBreakPoints, insertSizeDistribution);
-                final ReadLikelihoods<GenotypingAllele> discordantOrientationLikelihoods = calculateDiscordantOrientationLikelihoods(sampleList, genotypingAlleles, sampleTemplateAsReads, scoreTable, refBreakPoints, altBreakPoints, insertSizeDistribution);
-
-                    final int[] adi = new int[2];
-                    int dpi = 0;
-                        for (int t = 0; t < templates.size(); t++) {
-
-                    final TemplateMappingInformation refMapping = scoreTable.getMappingInfo(refHaplotypeIndex, t);
-                    final TemplateMappingInformation altMapping = scoreTable.getMappingInfo(altHaplotypeIndex, t);
-                    scoreTable.calculateBestMappingScores();
-                    //final int cap =
-                    //        Math.min((int) Math.min(scoreTable.bestMappingFragmentMQ[t][0], scoreTable.bestMappingFragmentMQ[t][1]),
-                    //                Math.min(mapQuals.get(t)[0], mapQuals.get(t)[1]));
-
-                    if (!refMapping.crossesBreakPoint(refBreakPoints) && !altMapping.crossesBreakPoint(altBreakPoints)) {
-                        continue;
-                    }
-                    if (refMapping.pairOrientation.isProper() == altMapping.pairOrientation.isProper()) {
-                        if (refMapping.pairOrientation.isProper() && (scoreTable.getMappingInfo(refHaplotypeIndex, t).crossesBreakPoint(refBreakPoints) || scoreTable.getMappingInfo(altHaplotypeIndex, t).crossesBreakPoint(altBreakPoints))) {
-                            dpRelevant[t] = true;
-                            dpi++;
-                            double refInsertSizeLog10Prob = insertSizeDistribution.logProbability(refMapping.insertSize.getAsInt()) / Math.log(10);
-                            double altInsertSizeLog10Prob = insertSizeDistribution.logProbability(altMapping.insertSize.getAsInt()) / Math.log(10);
-                            final double phredDiff = 10 * (refInsertSizeLog10Prob - altInsertSizeLog10Prob);
-                            if (phredDiff >= informativeTemplateDifferencePhred) {
-                                adi[0]++;
-                            } else if (-phredDiff >= informativeTemplateDifferencePhred) {
-                                adi[1]++;
+                                final TemplateMappingInformation mappingInformation = TemplateMappingInformation.fromAlignments(realignmentScoreArguments, haplotype,
+                                        template.fragments().get(0).bases(), firstIntervals,
+                                        template.fragments().get(1).bases(), secondIntervals);
+                                scoreTable.setMappingInfo(h, i, mappingInformation);
                             }
-                            if (Math.abs(phredDiff) > penalties.improperPairPenalty) {
-                                if (phredDiff > 0) {
-                                    altInsertSizeLog10Prob = refInsertSizeLog10Prob - 0.1 * Math.min(penalties.improperPairPenalty, 100000);
+                        }
+
+                        for (int t = 0; t < templates.size(); t++) {
+                            for (int f = 0; f < 2; f++) {
+                                final List<AlignmentInterval> newRefMapping = f == 0
+                                        ? scoreTable.getMappingInfo(refHaplotypeIndex, t).firstAlignmentIntervals
+                                        : scoreTable.getMappingInfo(refHaplotypeIndex, t).secondAlignmentIntervals;
+                                if (newRefMapping == null || newRefMapping.isEmpty()) {
+                                    continue;
+                                }
+                                final Template.Fragment fragment = templates.get(t).fragments().get(f);
+                                final List<AlignmentInterval> oldRefMapping = fragment.alignmentIntervals();
+                                if (oldRefMapping == null || oldRefMapping.isEmpty()) {
+                                    continue;
+                                }
+                                if (newRefMapping.size() != oldRefMapping.size()) {
+                                    mapQuals.get(t)[f] = 0;
                                 } else {
-                                    refInsertSizeLog10Prob = altInsertSizeLog10Prob - 0.1 * Math.min(penalties.improperPairPenalty, 100000);
+                                    for (final AlignmentInterval newInterval : newRefMapping) {
+                                        if (!oldRefMapping.stream().anyMatch(old ->
+                                                old.startInAssembledContig == newInterval.startInAssembledContig
+                                                        && old.endInAssembledContig == newInterval.endInAssembledContig
+                                                        && CigarUtils.equals(old.cigarAlong5to3DirectionOfContig, newInterval.cigarAlong5to3DirectionOfContig)
+                                                        && old.referenceSpan.getContig().equals(haplotypes.get(refHaplotypeIndex).getReferenceSpan().getContig())
+                                                        && old.referenceSpan.getStart() == haplotypes.get(refHaplotypeIndex).getReferenceSpan().getStart() + newInterval.referenceSpan.getStart() - 1)) {
+                                            mapQuals.get(t)[f] = 0;
+                                            break;
+                                        }
+                                    }
                                 }
                             }
-                            sampleLikelihoods.set(refIdx, t, sampleLikelihoods.get(refIdx, t) + refInsertSizeLog10Prob);
-                            sampleLikelihoods.set(altIdx, t, sampleLikelihoods.get(altIdx, t) + altInsertSizeLog10Prob);
                         }
-                        
-                   } else if (refMapping.pairOrientation.isProper() && altMapping.pairOrientation.isDefined()) {
-                          sampleLikelihoods.set(altIdx, t, sampleLikelihoods.get(altIdx, t) - 0.1 * Math.min(penalties.improperPairPenalty, 10000));
-                   } else if (altMapping.pairOrientation.isProper() && altMapping.pairOrientation.isDefined()){
-                          sampleLikelihoods.set(refIdx, t, sampleLikelihoods.get(refIdx, t) - 0.1 * Math.min(penalties.improperPairPenalty, 10000));
-                   }
-                }
-                int minRefPos = ref.getLength();
-                int maxRefPos = 0;
-                for (int t = 0; t < scoreTable.numberOfTemplates(); t++) {
-                    final TemplateMappingInformation mappingInfo = scoreTable.getMappingInfo(refHaplotypeIndex, t);
-                    if (mappingInfo.minCoordinate < minRefPos) {
-                        minRefPos = mappingInfo.minCoordinate;
-                    }
-                    if (mappingInfo.maxCoordinate > maxRefPos) {
-                        maxRefPos = mappingInfo.maxCoordinate;
-                    }
-                }
-                minRefPos = Math.max(0, minRefPos - 1);
-                maxRefPos = Math.min(ref.getLength(), maxRefPos + 1);
-                likelihoods.removeUniformativeReads(0.0);
-                likelihoods.normalizeLikelihoods(true, -0.1 * penalties.maximumTemplateScoreDifference);
-                final int[] ad = new int[2];
-                int dp = 0;
-                final int[] rld = new int[2];
-                for (int t = 0; t < scoreTable.numberOfTemplates(); t++) {
-                    if (!dpRelevant[t]) continue;
-                    dp++;
-                    final TemplateMappingInformation refMapping  = scoreTable.getMappingInfo(refHaplotypeIndex, t);
-                    final TemplateMappingInformation altMapping  = scoreTable.getMappingInfo(altHaplotypeIndex, t);
-                    final double refScore = refMapping.firstAlignmentScore.orElse(0) + refMapping.secondAlignmentScore.orElse(0);
-                    final double altScore = altMapping.firstAlignmentScore.orElse(0) + altMapping.secondAlignmentScore.orElse(0);
-                    final double phredDiff = 10 * (refScore - altScore);
-                    if (phredDiff >= informativeTemplateDifferencePhred) {
-                        rld[0]++;
-                    } else if (-phredDiff >= informativeTemplateDifferencePhred) {
-                        rld[1]++;
-                    }
-                }
-                ad[0] = 0; ad[1] = 0;
-                //        header.addMetaDataLine(new VCFFormatHeaderLine("MLD", VCFHeaderLineCount.R, VCFHeaderLineType.Float, "average Phred likelihood likelihood difference between this and the next best allele for templates supporting this allele (AD)"));
-                //        header.addMetaDataLine(new VCFFormatHeaderLine("IAD", VCFHeaderLineCount.R, VCFHeaderLineType.Integer, "number of templates that support this allele based on insert length only"));
-                //        header.addMetaDataLine(new VCFFormatHeaderLine("RAD", VCFHeaderLineCount.R, VCFHeaderLineType.Integer, "number of templates that support this allele based on read-mapping likelihoods only"));
-                final double[] diffs = new double[2];
-                for (int r = 0; r < likelihoods.readCount(); r++) {
-                    final double phredDiff = 10 * ( likelihoods.sampleMatrix(0).get(refIdx, r) - likelihoods.sampleMatrix(0).get(altIdx, r));
-                    if (phredDiff >= informativeTemplateDifferencePhred) {
-                        ad[0]++;
-                        diffs[0] += phredDiff;
-                    } else if (-phredDiff >= informativeTemplateDifferencePhred){
-                        ad[1]++;
-                        diffs[1] -= phredDiff;
-                    }
-                }
-                final String[] diffStrings = new String[] { ad[0] == 0 ? "." : String.format("%.1f", diffs[0] / ad[0]),
-                                                            ad[1] == 0 ? "." : String.format("%.1f", diffs[1] / ad[1])};
-                final GenotypeLikelihoods likelihoods1 = genotypeCalculator.genotypeLikelihoods(likelihoods.sampleMatrix(0));
-                final int pl[] = likelihoods1.getAsPLs();
-                final int bestGenotypeIndex = MathUtils.maxElementIndex(likelihoods1.getAsVector());
-                final int gq = GATKVariantContextUtils.calculateGQFromPLs(pl);
-                final List<Allele> genotypeAlleles = gq == 0
-                        ? Arrays.asList(Allele.NO_CALL, Allele.NO_CALL)
-                        : (bestGenotypeIndex == 0
-                           ? Arrays.asList(variant._1().getReference(), variant._1().getReference())
-                           : ((bestGenotypeIndex == 1)
-                              ? Arrays.asList(variant._1().getReference(), variant._1().getAlternateAllele(0))
-                              : Arrays.asList(variant._1().getAlternateAllele(0), variant._1().getAlternateAllele(0))));
-                final long endTime = System.currentTimeMillis();
-                final VariantContextBuilder newVariantBuilder = new VariantContextBuilder(variant._1());
-                newVariantBuilder.attribute("READ_COUNT", allTemplates.size() * 2);
-                newVariantBuilder.attribute("CONTIG_COUNT", haplotypes.size());
-                newVariantBuilder.attribute("RUNTIME_IN_MILLIS", endTime - startTime);
-                if (minRefPos <= maxRefPos) {
-                    newVariantBuilder.attribute("REF_COVERED_RANGE", new int[] { minRefPos + 1, maxRefPos - 1 });
-                    newVariantBuilder.attribute("REF_COVERED_RATIO", ((double) maxRefPos - minRefPos) / ref.getLength());
-                    newVariantBuilder.attribute("ALT_REF_COVERED_SIZE_RATIO", (alt.getLength() + (maxRefPos - minRefPos )- ref.getLength()) / ((double) maxRefPos - minRefPos));
-                   // newVariantBuilder.attribute("BEST_MAPPINGS", scoreTable.bestScoreValueString());
-                }
-                newVariantBuilder.genotypes(
-                        new GenotypeBuilder().name("sample")
-                                .PL(pl)
-                                .GQ(gq)
-                                .DP(dp)
-                                .AD(ad)
-                                .attribute("ADM", diffStrings)
-                                .attribute("ADR", rld)
-                                .attribute("ADI", adi)
-                                .attribute("DPI", dpi)
-                                .alleles(genotypeAlleles).make());
-                if (outputAlignmentHeader == null) {
-                    return Call.of(SVContext.of(newVariantBuilder.make()));
-                } else {
-                    final List<SAMRecord> outputAlignemntRecords = new ArrayList<>();
-                    for (final SVHaplotype haplotype : haplotypes) {
 
-                    }
-                    return Call.of(SVContext.of(newVariantBuilder.make()));
-                }
-           }).iterator();
+                        //    resolve the missing mapping scores to the worst seen + a penalty.
+                        for (int t = 0; t < templates.size(); t++) {
+
+                            final OptionalDouble bestFirstAlignmentScore = scoreTable.getWorstAlignmentScore(t, 0);
+                            if (bestFirstAlignmentScore.isPresent()) {
+                                final double missingAlignmentScore = bestFirstAlignmentScore.getAsDouble() - 0.1 * penalties.unmappedFragmentPenalty;
+                                scoreTable.applyMissingAlignmentScore(t, 0, missingAlignmentScore);
+                            }
+                            final OptionalDouble bestSecondAlignmentScore = scoreTable.getWorstAlignmentScore(t, 1);
+                            if (bestSecondAlignmentScore.isPresent()) {
+                                final double missingAlignmentScore = bestSecondAlignmentScore.getAsDouble() - 0.1 * penalties.unmappedFragmentPenalty;
+                                scoreTable.applyMissingAlignmentScore(t, 1, missingAlignmentScore);
+                            }
+                        }
+                        scoreTable.calculateBestMappingScores();
+                        final AlleleList<GenotypingAllele> genotypingAlleles = new IndexedAlleleList<>(refAllele, altAllele);
+                        final SampleList sampleList = SampleList.singletonSampleList("sample");
+                        final Map<String, List<GATKRead>> sampleTemplateAsReads = Collections.singletonMap(sampleList.getSample(0), templatesAsReads);
+                        final Set<String> altContigNames = variant._1().getSupportingContigIds().stream()
+                                .collect(Collectors.toSet());
+                        // we check what templates are relevant toward genotyping, by default only those that map across a break point.
+
+                        final ReadLikelihoods<GenotypingAllele> splitsReadlikelihoods = calculateSplitReadLikelihoods(penalties, ignoreReadsThatDontOverlapBreakingPoint, insertSizeDistribution, realignmentScoreArguments, haplotypes, templates, mapQuals, refBreakPoints, altBreakPoints, refAllele, altAllele, refHaplotypeIndex, altHaplotypeIndex, scoreTable, genotypingAlleles, sampleList, sampleTemplateAsReads, altContigNames);
+                        final ReadLikelihoods<GenotypingAllele> insertSizeLikelihoods = calculateInsertSizeLikelihoods(sampleList, genotypingAlleles, sampleTemplateAsReads, scoreTable, refHaplotypeIndex, altHaplotypeIndex, refBreakPoints, altBreakPoints, insertSizeDistribution);
+                        final ReadLikelihoods<GenotypingAllele> discordantOrientationLikelihoods = calculateDiscordantOrientationLikelihoods(sampleList, genotypingAlleles, sampleTemplateAsReads, scoreTable,refHaplotypeIndex, altHaplotypeIndex,  refBreakPoints, altBreakPoints, insertSizeDistribution);
+                        final ReadLikelihoods<GenotypingAllele> totalLikelihoods = ReadLikelihoods.sum(splitsReadlikelihoods, insertSizeLikelihoods, discordantOrientationLikelihoods);
+
+                        int minRefPos = ref.getLength();
+                        int maxRefPos = 0;
+                        for (int t = 0; t < scoreTable.numberOfTemplates(); t++) {
+                            final TemplateMappingInformation mappingInfo = scoreTable.getMappingInfo(refHaplotypeIndex, t);
+                            if (mappingInfo.minCoordinate < minRefPos) {
+                                minRefPos = mappingInfo.minCoordinate;
+                            }
+                            if (mappingInfo.maxCoordinate > maxRefPos) {
+                                maxRefPos = mappingInfo.maxCoordinate;
+                            }
+                        }
+                        minRefPos = Math.max(0, minRefPos - 1);
+                        maxRefPos = Math.min(ref.getLength(), maxRefPos + 1);
+                        totalLikelihoods.removeUniformativeReads(0.0);
+                        totalLikelihoods.normalizeLikelihoods(true, -0.1 * penalties.maximumTemplateScoreDifference);
+                        final GenotypeLikelihoods likelihoods1 = genotypeCalculator.genotypeLikelihoods(totalLikelihoods.sampleMatrix(0));
+                        final int pl[] = likelihoods1.getAsPLs();
+                        final int bestGenotypeIndex = MathUtils.maxElementIndex(likelihoods1.getAsVector());
+                        final int gq = GATKVariantContextUtils.calculateGQFromPLs(pl);
+                        final List<Allele> genotypeAlleles = gq == 0
+                                ? Arrays.asList(Allele.NO_CALL, Allele.NO_CALL)
+                                : (bestGenotypeIndex == 0
+                                ? Arrays.asList(variant._1().getReference(), variant._1().getReference())
+                                : ((bestGenotypeIndex == 1)
+                                ? Arrays.asList(variant._1().getReference(), variant._1().getAlternateAllele(0))
+                                : Arrays.asList(variant._1().getAlternateAllele(0), variant._1().getAlternateAllele(0))));
+                        final long endTime = System.currentTimeMillis();
+                        final VariantContextBuilder newVariantBuilder = new VariantContextBuilder(variant._1());
+                        newVariantBuilder.attribute("READ_COUNT", nonRepeatTemplates.size() * 2);
+                        newVariantBuilder.attribute("CONTIG_COUNT", haplotypes.size());
+                        newVariantBuilder.attribute("RUNTIME_IN_MILLIS", endTime - startTime);
+                        if (minRefPos <= maxRefPos) {
+                            newVariantBuilder.attribute("REF_COVERED_RANGE", new int[]{minRefPos + 1, maxRefPos - 1});
+                            newVariantBuilder.attribute("REF_COVERED_RATIO", ((double) maxRefPos - minRefPos) / ref.getLength());
+                            newVariantBuilder.attribute("ALT_REF_COVERED_SIZE_RATIO", (alt.getLength() + (maxRefPos - minRefPos) - ref.getLength()) / ((double) maxRefPos - minRefPos));
+                            // newVariantBuilder.attribute("BEST_MAPPINGS", scoreTable.bestScoreValueString());
+                        }
+                        newVariantBuilder.genotypes(
+                                new GenotypeBuilder().name("sample")
+                                        .PL(pl)
+                                        .GQ(gq)
+//                                .DP(dp)
+//                                .AD(ad)
+//                                .attribute("ADM", diffStrings)
+//                                .attribute("ADR", rld)
+//                                .attribute("ADI", adi)
+//                                .attribute("DPI", dpi)
+                                        .alleles(genotypeAlleles).make());
+                        if (outputAlignmentHeader == null) {
+                            return Call.of(SVContext.of(newVariantBuilder.make()));
+                        } else {
+                            final List<SAMRecord> outputAlignemntRecords = new ArrayList<>();
+                            for (final SVHaplotype haplotype : haplotypes) {
+
+                            }
+                            return Call.of(SVContext.of(newVariantBuilder.make()));
+                        }
+                    }).iterator();
         });
+    }
+
+    private static ReadLikelihoods<GenotypingAllele> calculateSplitReadLikelihoods(AlignmentPenalties penalties, boolean ignoreReadsThatDontOverlapBreakingPoint, InsertSizeDistribution insertSizeDistribution, RealignmentScoreParameters realignmentScoreArguments, List<SVHaplotype> haplotypes, List<Template> templates, List<int[]> mapQuals, int[] refBreakPoints, int[] altBreakPoints, GenotypingAllele refAllele, GenotypingAllele altAllele, int refHaplotypeIndex, int altHaplotypeIndex, TemplateHaplotypeScoreTable scoreTable, AlleleList<GenotypingAllele> genotypingAlleles, SampleList sampleList, Map<String, List<GATKRead>> sampleTemplateAsReads, Set<String> altContigNames) {
+        final ReadLikelihoods<GenotypingAllele> likelihoods = new ReadLikelihoods<>(sampleList,
+                genotypingAlleles, sampleTemplateAsReads);
+        final ReadLikelihoods<GenotypingAllele> likelihoods2 = new ReadLikelihoods<>(sampleList,
+                genotypingAlleles, sampleTemplateAsReads);
+
+        final ReadLikelihoods<GenotypingAllele> likelihoodsFirst = new ReadLikelihoods<>(sampleList,
+                genotypingAlleles, sampleTemplateAsReads);
+        final ReadLikelihoods<GenotypingAllele> likelihoodsSecond = new ReadLikelihoods<>(sampleList,
+                genotypingAlleles, sampleTemplateAsReads);
+
+        final LikelihoodMatrix<GenotypingAllele> sampleLikelihoods = likelihoods.sampleMatrix(0);
+        final LikelihoodMatrix<GenotypingAllele> sampleLikelihoods2 = likelihoods2.sampleMatrix(0);
+        final LikelihoodMatrix<GenotypingAllele> sampleLikelihoodsFirst = likelihoodsFirst.sampleMatrix(0);
+        final LikelihoodMatrix<GenotypingAllele> sampleLikelihoodsSecond = likelihoodsSecond.sampleMatrix(0);
+
+        sampleLikelihoods.fill(Double.NEGATIVE_INFINITY);
+        sampleLikelihoods.fill(Double.NEGATIVE_INFINITY);
+        final int refIdx = likelihoods.indexOfAllele(refAllele);
+        final int altIdx = likelihoods.indexOfAllele(altAllele);
+        if (refIdx != 0 || altIdx != 1) {
+            throw new IllegalStateException(" " + refIdx + " " + altIdx);
+        }
+        final List<SVContig> contigs = haplotypes.stream().filter(SVHaplotype::isNeitherReferenceNorAlternative).map(SVContig.class::cast)
+                .collect(Collectors.toList());
+        for (int t = 0; t < templates.size(); t++) {
+            sampleLikelihoodsFirst.set(refIdx, t,
+                    scoreTable.getMappingInfo(refHaplotypeIndex, t).firstAlignmentScore.orElse(0));
+            sampleLikelihoodsSecond.set(refIdx, t,
+                    scoreTable.getMappingInfo(refHaplotypeIndex, t).secondAlignmentScore.orElse(0));
+            sampleLikelihoodsFirst.set(altIdx, t,
+                    scoreTable.getMappingInfo(altHaplotypeIndex, t).firstAlignmentScore.orElse(0));
+            sampleLikelihoodsSecond.set(altIdx, t,
+                    scoreTable.getMappingInfo(altHaplotypeIndex, t).secondAlignmentScore.orElse(0));
+        }
+        for (int h = 0; h < contigs.size(); h++) {
+            final SVContig contig = contigs.get(h);
+            final int mappingInfoIndex = haplotypes.indexOf(contig);
+            double haplotypeAltScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(altHaplotypeIndex).getBases(), contig.getBases(), contig.getAlternativeAlignment()).getLog10Prob();
+            double haplotypeRefScore = RealignmentScore.calculate(realignmentScoreArguments, haplotypes.get(refHaplotypeIndex).getBases(), contig.getBases(), contig.getReferenceAlignment()).getLog10Prob();
+            if (altContigNames.contains(contig.getName())) {
+                haplotypeAltScore = 0;
+                haplotypeRefScore = -60;
+            }
+            final double maxMQ = contig.getMinimumMappingQuality();
+            final double base = Math.max(haplotypeAltScore, haplotypeRefScore);
+            haplotypeAltScore -= base;
+            haplotypeRefScore -= base;
+            // we cap the difference of scores by the contig mapping quality.
+            // so that contigs that could map in several places in the genome has less weight when assigning
+            // genotypes.
+            if (haplotypeAltScore < haplotypeRefScore) {
+                haplotypeAltScore = Math.max(haplotypeAltScore, haplotypeRefScore - 0.1 * maxMQ);
+            } else {
+                haplotypeRefScore = Math.max(haplotypeRefScore, haplotypeAltScore - 0.1 * maxMQ);
+            }
+            if (haplotypeRefScore == haplotypeAltScore) {
+                haplotypeAltScore = haplotypeRefScore = Double.NEGATIVE_INFINITY;
+            }
+
+            // for each template we apply the scores thru the haplotype/contig `c`. We reduce/marginalize the likelihood
+            // to take the maximum across all haplotype/contigs for that template.
+            for (int t = 0; t < templates.size(); t++) {
+                final boolean noAlignment = !scoreTable.getMappingInfo(mappingInfoIndex, t).firstAlignmentScore.isPresent()
+                        && !scoreTable.getMappingInfo(mappingInfoIndex, t).secondAlignmentScore.isPresent();
+                if (noAlignment) continue;
+                final double firstMappingScore = scoreTable.getMappingInfo(mappingInfoIndex, t).firstAlignmentScore.orElse(Double.NEGATIVE_INFINITY);
+                final double secondMappingScore = scoreTable.getMappingInfo(mappingInfoIndex, t).secondAlignmentScore.orElse(Double.NEGATIVE_INFINITY);
+                sampleLikelihoodsFirst.set(refIdx, t,
+                        Math.max(firstMappingScore + haplotypeRefScore, sampleLikelihoodsFirst.get(refIdx, t)));
+                sampleLikelihoodsFirst.set(altIdx, t,
+                        Math.max(firstMappingScore + haplotypeAltScore, sampleLikelihoodsFirst.get(altIdx, t)));
+                sampleLikelihoodsSecond.set(refIdx, t,
+                        Math.max(secondMappingScore + haplotypeRefScore, sampleLikelihoodsSecond.get(refIdx, t)));
+                sampleLikelihoodsSecond.set(altIdx, t,
+                        Math.max(secondMappingScore + haplotypeAltScore, sampleLikelihoodsSecond.get(altIdx, t)));
+            }
+        }
+        // we cap the likelihood difference for each allele haplotypes for each fragment in each template by th
+        // mapping quality of the fragment so that those reads that may map to other locations in the genome count less
+        // towards genotyping.
+        for (int t = 0; t < templates.size(); t++) {
+            for (int f = 0; f < 2; f++) {
+                final int maxMq = mapQuals.get(t)[f];
+                final LikelihoodMatrix<GenotypingAllele> matrix = f == 0 ? sampleLikelihoodsFirst : sampleLikelihoodsSecond;
+                final double base = Math.max(matrix.get(refIdx, t), matrix.get(altIdx, t));
+                final int maxIndex = matrix.get(refIdx, t) == base ? refIdx : altIdx;
+                final int minIndex = maxIndex == refIdx ? altIdx : refIdx;
+                matrix.set(minIndex, t, Math.max(matrix.get(maxIndex, t) - 0.1 * maxMq, matrix.get(minIndex, t)));
+            }
+        }
+
+
+        for (int j = 0; j < sampleLikelihoods.numberOfReads(); j++) {
+            boolean considerFirstFragment = true;
+            boolean considerSecondFragment = true;
+            if (ignoreReadsThatDontOverlapBreakingPoint) {
+                considerFirstFragment = scoreTable.getMappingInfo(refHaplotypeIndex, j).crossesBreakPoint(refBreakPoints)
+                        || scoreTable.getMappingInfo(altHaplotypeIndex, j).crossesBreakPoint(altBreakPoints);
+                considerSecondFragment = scoreTable.getMappingInfo(refHaplotypeIndex, j).crossesBreakPoint(refBreakPoints)
+                        || scoreTable.getMappingInfo(altHaplotypeIndex, j).crossesBreakPoint(altBreakPoints);
+            }
+
+            //TODO  the following adjustment seem to increase accuracy but the maths are a bit sketchy so for now I
+            //include it.
+            // The idea is to penalize poorly modeled reads... those that allele haplotype likelihood difference is not
+            // much larger than the magnitude of the likelihood of the best allele likelihood.
+            // so for example a template fragment has lks Phred 3000 3100, there is 100 diff in Lk but is very small
+            // when compare to how unlikely the read is even with the best haplotype (3000) so is 100 even relevant?
+            // The code simply substract 3000 to those 100 (min 0) so in the end such a read to be of any value for Lk
+            // calculation the worst allele lk would need to be at least 6000.
+            //
+            // at first may seem a reasonable thing to do but it it unclear how to weight down these reads... just take
+            // the best lk seems arbitrary.
+            //
+            // This might be resolved differently by ignoring short variant differences so that the Lk is totally
+            // defined by real SV variation and so the 3000 becomes closer to 0. Or that in general the 100 is actual
+            // real SV differences rather that differences due to chance in the distribution of short variants between
+            // contigs.
+            //if (sampleLikelihoodsFirst == sampleLikelihoodsSecond) debug00(sampleLikelihoodsFirst, sampleLikelihoodsSecond);
+            for (int k = 0; k < 2; k++) {
+                final LikelihoodMatrix<GenotypingAllele> matrix = k == 0 ? sampleLikelihoodsFirst : sampleLikelihoodsSecond;
+                final double base = Math.max(matrix.get(refIdx, j), matrix.get(altIdx, j));
+                final int maxIndex = matrix.get(refIdx, j) == base ? refIdx : altIdx;
+                final int minIndex = maxIndex == refIdx ? altIdx : refIdx;
+                matrix.set(minIndex, j, Math.min(matrix.get(maxIndex, j), matrix.get(minIndex, j) - scoreTable.bestMappingScorePerFragment[j][k]));
+            }
+            for (int i = 0; i < sampleLikelihoods.numberOfAlleles(); i++) {
+                sampleLikelihoods.set(i, j, (considerFirstFragment ? sampleLikelihoodsFirst.get(i, j) : 0) +
+                        ((considerSecondFragment) ? sampleLikelihoodsSecond.get(i, j) : 0));
+
+            }
+        }
+
+        return likelihoods;
     }
 
     private static ReadLikelihoods<GenotypingAllele> calculateDiscordantOrientationLikelihoods(final SampleList sampleList,
                                                                                                final AlleleList<GenotypingAllele> genotypingAlleles,
-                                                                                               final Map<String,List<GATKRead>> sampleTemplateAsReads,
+                                                                                               final Map<String, List<GATKRead>> sampleTemplateAsReads,
                                                                                                final TemplateHaplotypeScoreTable scoreTable,
+                                                                                               final int refHaplotypeIdx,
+                                                                                               final int altHaplotypeIdx,
                                                                                                final int[] refBreakPoints,
                                                                                                final int[] altBreakPoints,
                                                                                                final InsertSizeDistribution insertSizeDistribution) {
         final ReadLikelihoods<GenotypingAllele> result = new ReadLikelihoods<>(sampleList, genotypingAlleles, sampleTemplateAsReads);
         final LikelihoodMatrix<GenotypingAllele> matrix = result.sampleMatrix(0);
         for (int t = 0; t < matrix.numberOfReads(); t++) {
-            final TemplateMappingInformation referenceMappingInfo = scoreTable.getMappingInfo(0, t);
-            final TemplateMappingInformation alternativeMappingInfo = scoreTable.getMappingInfo(1, t);
+            final TemplateMappingInformation referenceMappingInfo = scoreTable.getMappingInfo(refHaplotypeIdx, t);
+            final TemplateMappingInformation alternativeMappingInfo = scoreTable.getMappingInfo(altHaplotypeIdx, t);
             if (!referenceMappingInfo.pairOrientation.isDefined()) continue;
             if (!alternativeMappingInfo.pairOrientation.isDefined()) continue;
             if (referenceMappingInfo.pairOrientation.isProper() == alternativeMappingInfo.pairOrientation.isProper())
                 continue;
-            if (referenceMappingInfo.pairOrientation.isProper() && referenceMappingInfo.crossesBreakPointCountingClippedBases(refBreakPoints)) {
+            if (referenceMappingInfo.pairOrientation.isProper() && referenceMappingInfo.crossesBreakPoint(refBreakPoints)) {
                 matrix.set(1, t, -2.0);
-            } else if (alternativeMappingInfo.pairOrientation.isProper() && alternativeMappingInfo.crossesBreakPointCountingClippedBases(altBreakPoints)) {
+            } else if (alternativeMappingInfo.pairOrientation.isProper() && alternativeMappingInfo.crossesBreakPoint(altBreakPoints)) {
                 matrix.set(0, t, -2.0);
             }
         }
@@ -904,22 +851,24 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     }
 
     private static ReadLikelihoods<GenotypingAllele> calculateInsertSizeLikelihoods(final SampleList sampleList, final AlleleList<GenotypingAllele> genotypingAlleles,
-                                                                                    final Map<String,List<GATKRead>> sampleTemplateAsReads,
+                                                                                    final Map<String, List<GATKRead>> sampleTemplateAsReads,
                                                                                     final TemplateHaplotypeScoreTable scoreTable,
+                                                                                    final int refHaplotypeIdx,
+                                                                                    final int altHaplotypeIdx,
                                                                                     final int[] refBreakPoints,
                                                                                     final int[] altBreakPoints, final InsertSizeDistribution dist) {
         final ReadLikelihoods<GenotypingAllele> result = new ReadLikelihoods<>(sampleList, genotypingAlleles, sampleTemplateAsReads);
         final LikelihoodMatrix<GenotypingAllele> matrix = result.sampleMatrix(0);
         for (int t = 0; t < matrix.numberOfReads(); t++) {
-            final TemplateMappingInformation referenceMappingInfo = scoreTable.getMappingInfo(0, t);
-            final TemplateMappingInformation alternativeMappingInfo = scoreTable.getMappingInfo(1, t);
+            final TemplateMappingInformation referenceMappingInfo = scoreTable.getMappingInfo(refHaplotypeIdx, t);
+            final TemplateMappingInformation alternativeMappingInfo = scoreTable.getMappingInfo(altHaplotypeIdx, t);
             if (!referenceMappingInfo.pairOrientation.isProper()) continue;
             if (!alternativeMappingInfo.pairOrientation.isProper()) continue;
-            final boolean accrossBreakPointsOnRef = referenceMappingInfo.crossesBreakPointCountingClippedBases(refBreakPoints);
-            final boolean accrossBreakPointsOnAlt = alternativeMappingInfo.crossesBreakPointCountingClippedBases(altBreakPoints);
+            final boolean accrossBreakPointsOnRef = referenceMappingInfo.crossesBreakPoint(refBreakPoints);
+            final boolean accrossBreakPointsOnAlt = alternativeMappingInfo.crossesBreakPoint(altBreakPoints);
             if (accrossBreakPointsOnAlt || accrossBreakPointsOnRef) {
-                final double refInsertSizeLk = dist.logProbability(referenceMappingInfo.insertSizeCountingClippedBases());
-                final double altInsertSizeLk = dist.logProbability(alternativeMappingInfo.insertSizeCountingClippedBases());
+                final double refInsertSizeLk = dist.logProbability(referenceMappingInfo.insertSize.getAsInt()) / Math.log(10);
+                final double altInsertSizeLk = dist.logProbability(alternativeMappingInfo.insertSize.getAsInt()) / Math.log(10);
                 final double best = Math.max(refInsertSizeLk, altInsertSizeLk);
                 final double worst = best - 2.0;
                 matrix.set(0, t, Math.max(worst, refInsertSizeLk));
