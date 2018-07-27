@@ -45,6 +45,7 @@ public class Template implements Serializable {
         private final byte[] bases;
         private final int[] qualities;
         private final int length;
+        private int mappingQuality;
         private final String name;
         private final TemplateFragmentOrdinal number;
         private final List<AlignmentInterval> mapping;
@@ -60,6 +61,7 @@ public class Template implements Serializable {
             this.mapping = mapping;
             this.bases = Utils.nonNull(bases);
             this.qualities = Utils.nonNull(qualities);
+            this.mappingQuality = SAMRecord.UNKNOWN_MAPPING_QUALITY;
             this.length = bases.length;
             if (this.length != qualities.length) {
                 throw new IllegalArgumentException("the input bases and qualities must have the same length");
@@ -104,6 +106,14 @@ public class Template implements Serializable {
             }
             return result;
         }
+
+        public int getMappingQuality() {
+            return mappingQuality;
+        }
+
+        public void setMappingQuality(final int mq) {
+            mappingQuality = mq;
+        }
     }
 
     private Template(final String name, final List<Fragment> fragments) {
@@ -138,14 +148,13 @@ public class Template implements Serializable {
     }
 
 
-    public int[] fragmentMaximumMappingQualities(final SVIntervalTree<?> targetIntervals, SVIntervalLocator locator,
+    public void calculateMaximumMappingQualities(final SVIntervalTree<?> targetIntervals, SVIntervalLocator locator,
                                                  final InsertSizeDistribution insertSizeDistribution) {
-        final int[] result = new int[fragments.size()];
         if (fragments.isEmpty()) {
-            return result;
+            return;
         }
         int definedMappingQualities = 0;
-        for (int i = 0; i < result.length; i++) {
+        for (int i = 0; i < fragments.size(); i++) {
             int maxInZoneQual = -1;
             final Fragment fragment = fragments.get(i);
             for (final AlignmentInterval mappingInterval : fragment.alignmentIntervals()) {
@@ -160,21 +169,25 @@ public class Template implements Serializable {
                 }
             }
             if (maxInZoneQual == -1) {
-                result[i] = maxInZoneQual;
+                fragment.setMappingQuality(maxInZoneQual);
             } else {
                 definedMappingQualities++;
-                result[i] = Math.max(0, maxInZoneQual);
+                fragment.setMappingQuality(Math.max(0, maxInZoneQual));
             }
         }
         if (definedMappingQualities == 0) {
-            Arrays.fill(result, 60); // 10 default quals for totally unmapped pairs.
-        } else if (definedMappingQualities < result.length) {
-            final int maxQual = Arrays.stream(result).max().getAsInt();
-            for (int i = 0; i < result.length; i++) {
-                if (result[i] == -1) result[i] = maxQual;
+            for (final Fragment fragment : fragments) {
+                fragment.setMappingQuality(60); // default qual for unmapped fragments.
+            }
+        } else if (definedMappingQualities < fragments.size()) {
+            final int maxQual = fragments.stream().mapToInt(Fragment::getMappingQuality)
+                .map(qual -> qual == SAMRecord.UNKNOWN_MAPPING_QUALITY ? -1 : qual).max().orElse(0);
+            for (final Fragment fragment: fragments) {
+                if (fragment.getMappingQuality() == SAMRecord.UNKNOWN_MAPPING_QUALITY) {
+                    fragment.setMappingQuality(maxQual);
+                }
             }
         }
-        return result;
     }
 
 
