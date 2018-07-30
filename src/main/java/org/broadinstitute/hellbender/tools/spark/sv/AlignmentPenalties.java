@@ -43,10 +43,6 @@ public class AlignmentPenalties implements Serializable {
              shortName = MAXIMUM_TEMPLATE_SCORE_DIFF_SHORT_NAME)
     public double maximumTemplateScoreDifference = MAXIMUM_LIKELIHOOD_DIFFERENCE_CAP_DEFAULT;
 
-    public double inversion = -4.0 * Math.log(10);
-    public double indelStart = -4.5 * Math.log(10);
-    public double indelExtend = Math.log(0.1);
-
     public void validate() {
         if (unmappedFragmentPenalty < 0 || Double.isInfinite(unmappedFragmentPenalty) || Double.isNaN(unmappedFragmentPenalty)) {
             throw new CommandLineException.BadArgumentValue(UNMAPPED_FRAGMENT_PENALTY_FULL_NAME, ""+ unmappedFragmentPenalty);

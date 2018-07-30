@@ -91,7 +91,7 @@ public class TemplateMappingTable implements Serializable {
         return mappingInfo[alleleIndex][templateIndex];
     }
 
-    public void setMappingInfo(final int alleleIndex, final int templateIndex, final TemplateMapping mappingInformation) {
+    public void setMapping(final int alleleIndex, final int templateIndex, final TemplateMapping mappingInformation) {
         Utils.validIndex(alleleIndex, haplotypes.size());
         Utils.validIndex(templateIndex, templates.size());
         mappingInfo[alleleIndex][templateIndex] = mappingInformation;
@@ -234,8 +234,8 @@ public class TemplateMappingTable implements Serializable {
                 final SVContig contig = (SVContig) haplotype;
                 final double refScore = contig.getReferenceScore();
                 final double altScore = contig.getAlternativeScore();
-                final String call = refScore < altScore ? "alt" : ((altScore < refScore) ? "ref" : ".");
-                final double qual = call.equals("alt") ? (altScore - refScore) : (call.equals("ref") ? refScore - altScore : Double.NaN);
+                final String call = refScore < altScore ? "altHaplotype" : ((altScore < refScore) ? "refHaplotype" : ".");
+                final double qual = call.equals("altHaplotype") ? (altScore - refScore) : (call.equals("refHaplotype") ? refScore - altScore : Double.NaN);
                 builder.append(':').append(call).append(Double.isNaN(qual) ? "" : String.format(":%.2f", qual));
             }
         }
@@ -257,9 +257,9 @@ public class TemplateMappingTable implements Serializable {
                         .append(':').append(String.format("%.2f", info.insertSize.isPresent() ? distr.logProbability(info.insertSize.getAsInt()) : Double.NaN))
                         .append(':').append(String.format("%.2f", info.firstAlignmentScore.orElse(Double.NaN)))
                         .append(':').append(String.format("%.2f", info.secondAlignmentScore.orElse(Double.NaN)));
-                if (haplotype.getName().equals("ref")) {
+                if (haplotype.getName().equals("refHaplotype")) {
                     builder.append(':').append(info.crossesBreakPoint(refBreakPoints) ? "1" : "0");
-                } else if (haplotype.getName().equals("alt")) {
+                } else if (haplotype.getName().equals("altHaplotype")) {
                     builder.append(':').append(info.crossesBreakPoint(altBreakPoints) ? "1" : "0");
                 }
             }

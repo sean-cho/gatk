@@ -38,9 +38,9 @@ public class SVContig extends ArraySVHaplotype {
     }
 
     public double getAlternativeScore() {
-        if (name.equals("alt")) {
+        if (name.equals("altHaplotype")) {
             return 0.0;
-        } else if (name.equals("ref")) {
+        } else if (name.equals("refHaplotype")) {
             return Double.NEGATIVE_INFINITY;
         } else {
             return alternativeAlignmentScore == null ? Double.NaN  : alternativeAlignmentScore.getLog10Prob();

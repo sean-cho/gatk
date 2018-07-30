@@ -72,7 +72,7 @@ import java.util.stream.Stream;
  *     disambiguate when variants are close to each other.
  * </p>
  * <p>
- *     Records with names "ref" and "alt" represent the <i>reference haplotype</i> and the <i>alternative haplotype</i> for that variant.
+ *     Records with names "refHaplotype" and "altHaplotype" represent the <i>reference haplotype</i> and the <i>alternative haplotype</i> for that variant.
  *     These are synthetic records. There is always one and only one of each for each variant. These are all part of the {@code "HAP"} read-group.
  * </p>
  * <p>
@@ -84,13 +84,13 @@ import java.util.stream.Stream;
  * <p>
  *    Also these have a number of annotations indicating amongst other things what allele/haplotype they support:
  *     <dl>
- *         <dt>HP</dt><dd>the haplotype the support, {@code 'ref'} for reference, {@code 'alt'} for alternative and {@code '.'} for neither. (e.g. {@code "HP:Z:ref", "HP:Z:alt", "HP:Z:."}).</dd>
+ *         <dt>HP</dt><dd>the haplotype the support, {@code 'refHaplotype'} for reference, {@code 'altHaplotype'} for alternative and {@code '.'} for neither. (e.g. {@code "HP:Z:refHaplotype", "HP:Z:altHaplotype", "HP:Z:."}).</dd>
  *         <dt>HQ</dt><dd>the confidence in the support for the haplotype in {@code "HP"} (e.g. {@code "HQ:Z:10.0"}).
  *                        This value is equal to the difference between the score for the supported and the other haplotype</dd></dt>
  *         <dt>RS</dt><dd>the reference support score screen (e.g. {@code "RS:Z:-100,55,1,2,30,0"}).</dd>
  *         <dt>XS</dt><dd>the alternative allele score screen (e.g. {@code "XS:Z:-1241,134,2,1,5,1}).</dd>
- *         <dt>RA</dt><dd>alignment versus the "ref" haplotype for contigs and vs the reference for haplotypes</dd>
- *         <dt>XA</dt><dd>alignment versus the "alt" haplotype for contigs. It does not apply to haplotypes</dd>
+ *         <dt>RA</dt><dd>alignment versus the "refHaplotype" haplotype for contigs and vs the reference for haplotypes</dd>
+ *         <dt>XA</dt><dd>alignment versus the "altHaplotype" haplotype for contigs. It does not apply to haplotypes</dd>
  *         <dt>VC</dt><dd>coordinate of the targeted variant {@code chr:pos}</dd>
  *     </dl>
  * </p>
@@ -101,7 +101,7 @@ import java.util.stream.Stream;
  * <p>
  *     Where:
  *     <dl>
- *         <dt>score</dt><dd>score the contig given the happlotype (ref. for {@code RS}, alt. for {@code XS})</dd>
+ *         <dt>score</dt><dd>score the contig given the happlotype (refHaplotype. for {@code RS}, altHaplotype. for {@code XS})</dd>
  *         <dt>matches</dt><dd>number of base call matches</dd>
  *         <dt>mismatches</dt><dd>number of base call mismatches</dd>
  *         <dt>indels</dt><dd>number of insertion or deletions (i.e. gap-openings)</dd>
@@ -113,7 +113,7 @@ import java.util.stream.Stream;
 @CommandLineProgramProperties(
         summary = "composes contigs file for genotyping",
         oneLineSummary = "composes contigs file for genotyping",
-        usageExample = "--variant ins_and_dels.vcf --contigs assemblies.bam --reference my-ref.fa " +
+        usageExample = "--variant ins_and_dels.vcf --contigs assemblies.bam --reference my-refHaplotype.fa " +
                        "--shardSize 10000 --paddingSize 300 --output genotyping-contigs.bam",
         programGroup = StructuralVariantDiscoveryProgramGroup.class )
 @BetaFeature
@@ -146,8 +146,8 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
     public static final String ALTERNATIVE_ALIGNMENT_TAG = "XA";
     public static final String VARIANT_CONTEXT_TAG = "VC";
 
-    public static final String REF_CONTIG_NAME = "ref";
-    public static final String ALT_CONTIG_NAME = "alt";
+    public static final String REF_CONTIG_NAME = "refHaplotype";
+    public static final String ALT_CONTIG_NAME = "altHaplotype";
 
     @Argument(doc = "shard size",
               shortName = SHARD_SIZE_SHORT_NAME,

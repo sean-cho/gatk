@@ -10,6 +10,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.utils.SVIntervalLocator;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVIntervalTree;
 import org.broadinstitute.hellbender.tools.walkers.bqsr.BaseRecalibrator;
 import org.broadinstitute.hellbender.utils.MathUtils;
+import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.iterators.ArrayUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
@@ -147,6 +148,12 @@ public class Template implements Serializable {
         return name.hashCode();
     }
 
+    public GATKRead asUnmappedRead(final SAMFileHeader header) {
+        final SAMRecord record = new SAMRecord(header);
+        record.setReadName(name());
+        record.setReadUnmappedFlag(true);
+        return new SAMRecordToGATKReadAdapter(record);
+    }
 
     public void calculateMaximumMappingQualities(final SVIntervalTree<?> targetIntervals, SVIntervalLocator locator,
                                                  final InsertSizeDistribution insertSizeDistribution) {
