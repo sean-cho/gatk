@@ -436,7 +436,6 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         genotypingContext.reduceNumberOfTemplatesTo(MAX_NUMBER_OF_TEMPLATES_IN_CONTEXT);
                         final List<SVHaplotype> haplotypes = genotypingContext.haplotypes;
                         final List<Template> templates = genotypingContext.templates;
-                        final SimpleInterval variantLocation = variant.getStartPositionInterval();
                         //if (true) {
                         //    final VariantContextBuilder newVariantBuilder = new VariantContextBuilder(variant._1());
                         //    newVariantBuilder.attribute("READ_COUNT", sequences.size());

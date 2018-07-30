@@ -23,7 +23,7 @@ public class AlignmentPenalties implements Serializable {
 
     public static final double DEFAULT_UNMAPPED_FRAGMENT_PENALTY = 60;
     public static final double DEFAULT_IMPROPER_PAIR_PENALTY = 20;
-    public static final double MAXIMUM_LIKELIHOOD_DIFFERENCE_CAP_DEFAULT = 50;
+    public static final double MAXIMUM_LIKELIHOOD_DIFFERENCE_CAP_DEFAULT = 120;
 
     @Argument(doc = "unmapped fragment penalty",
               fullName = UNMAPPED_FRAGMENT_PENALTY_FULL_NAME,
