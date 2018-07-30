@@ -744,9 +744,9 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
             if (!alternativeMappingInfo.pairOrientation.isDefined()) continue;
             if (referenceMappingInfo.pairOrientation.isProper() == alternativeMappingInfo.pairOrientation.isProper())
                 continue;
-            if (referenceMappingInfo.pairOrientation.isProper() && referenceMappingInfo.crossesBreakPoint(context.refBreakPoints)) {
+            if (referenceMappingInfo.pairOrientation.isProper()) { // && referenceMappingInfo.crossesBreakPoint(context.refBreakPoints)) {
                 matrix.set(1, t, -2.0);
-            } else if (alternativeMappingInfo.pairOrientation.isProper() && alternativeMappingInfo.crossesBreakPoint(context.altBreakPoints)) {
+            } else if (alternativeMappingInfo.pairOrientation.isProper()) { //&& alternativeMappingInfo.crossesBreakPoint(context.altBreakPoints)) {
                 matrix.set(0, t, -2.0);
             }
         }
