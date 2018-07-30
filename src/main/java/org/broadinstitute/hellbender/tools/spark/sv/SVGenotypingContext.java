@@ -22,9 +22,11 @@ import org.broadinstitute.hellbender.utils.read.GATKRead;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -130,7 +132,7 @@ final class SVGenotypingContext {
                                final SAMSequenceDictionary dictionary) {
         Utils.nonNull(sampleName);
         this.variant = Utils.nonNull(variant);
-        this.haplotypes = Utils.stream(haplotypes).collect(Collectors.toList());
+        this.haplotypes = removeRedundantHaplotypes(Utils.stream(haplotypes).collect(Collectors.toList()));
         this.templates = Utils.stream(templates)
                 .distinct()
                 .filter(t -> t.fragments().stream().anyMatch(f -> f.getMappingQuality() > 0))
@@ -162,6 +164,23 @@ final class SVGenotypingContext {
         numberOfHaplotypes = this.haplotypes.size();
         numberOfTemplates = this.templates.size();
         sampleList = SampleList.singletonSampleList(sampleName);
+    }
+
+    private static List<SVHaplotype> removeRedundantHaplotypes(final List<SVHaplotype> in) {
+        if (in.size() <= 2) {
+            return in;
+        } else {
+            final Set<String> sequencesSoFar = new HashSet<>(in.size());
+            final List<SVHaplotype> out = new ArrayList<>(in.size());
+            for (final SVHaplotype haplotype : in) {
+                if (haplotype.isReference() || haplotype.isAlternative()) {
+                    out.add(haplotype);
+                } else if (sequencesSoFar.add(new String(haplotype.getBases()))) {
+                    out.add(haplotype);
+                }
+            }
+            return in.size() == out.size() ? in : out;
+        }
     }
 
     void reduceNumberOfTemplatesTo(final int maximum) {
