@@ -6,6 +6,7 @@ import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.genotyper.LikelihoodMatrix;
 
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 
@@ -61,13 +62,33 @@ public final class GenotypeLikelihoodCalculator {
      */
     private final PriorityQueue<Integer> alleleHeap;
 
-
     private double[] relativeAlleleFrequency;
 
     public void setRelativeAlleleFrequency(final double[] value) {
-        relativeAlleleFrequency = value;
+        if (value == null) {
+            relativeAlleleFrequency = null;
+        } else {
+            relativeAlleleFrequency = value.clone();
+            if (value.length != alleleCount) {
+                throw new IllegalArgumentException();
+            }
+            final double one = MathUtils.sum(relativeAlleleFrequency);
+            if (one == 0) {
+                Arrays.fill(relativeAlleleFrequency, 1.0 / value.length);
+            } else {
+                final double invOne = 1.0 / one;
+                for (int i = 0; i < relativeAlleleFrequency.length; i++) {
+                    relativeAlleleFrequency[i] *= invOne;
+                }
+            }
+        }
     }
 
+    public String context = "";
+
+    public double[] getRelativeAlleleFrequency() {
+        return relativeAlleleFrequency != null ? relativeAlleleFrequency.clone() : null;
+    }
 
     /**
      * Cache of the last genotype-allele-count requested using {@link #genotypeAlleleCountsAt(int)}, when it

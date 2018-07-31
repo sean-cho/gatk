@@ -18,7 +18,9 @@ public final class RealignmentScoreParameters implements Serializable {
     public static final double DEFAULT_GAP_EXTEND_COST = 10;
     public static final int DEFAULT_MIN_MAPQ = 16;
     public static final double DEFAULT_DOMINANT_ALIGNED_BASE_COUNT_RATIO = 1.1;
-    public static final int SHORT_INDEL_LENGTH_DEFAULT = 10;
+    public static final double DEFAULT_UNMAPPED_FRAGMENT_PENALTY = 60;
+    public static final double DEFAULT_IMPROPER_PAIR_PENALTY = 20;
+    public static final double DEFAULT_MAXIMUM_LIKELIHOOD_DIFFERENCE_PER_TEMPLATE = 120;
 
     public static final String GAP_OPEN_COST_PARAM_FULL_NAME = "realignment-gap-open-penalty";
     public static final String GAP_OPEN_COST_PARAM_SHORT_NAME = GAP_OPEN_COST_PARAM_FULL_NAME;
@@ -32,10 +34,12 @@ public final class RealignmentScoreParameters implements Serializable {
     public static final String MINIMUM_MAP_QUALITY_PARAM_SHORT_NAME = MINIMUM_MAP_QUALITY_PARAM_FULL_NAME ;
     public static final String DOMINANT_ALIGNED_BASE_COUNT_RATIO_PARAM_FULL_NAME = "dominant-strand-aligned-base-count-ratio";
     public static final String DOMINANT_ALIGNED_BASE_COUNT_RATIO_PARAM_SHORT_NAME = DOMINANT_ALIGNED_BASE_COUNT_RATIO_PARAM_FULL_NAME;
-    public static final String SHORT_INDEL_LENGTH_FULL_NAME = "short-indel-max-length";
-    public static final String SHORT_INDEL_LENGTH_SHORT_NAME = SHORT_INDEL_LENGTH_FULL_NAME;
-    public static final String DONT_CLIP_TRAILING_SNPS_FULL_NAME = "clip-trailing-snps";
-    public static final String DONT_CLIP_TRAILING_SNPS_SHORT_NAME = DONT_CLIP_TRAILING_SNPS_FULL_NAME;
+    public static final String MAXIMUM_LIKELIHOOD_DIFFERENCE_PER_TEMPLATE_FULL_NAME = "maximum-likelihood-difference-per-template";
+    public static final String MAXIMUM_LIKELIHOOD_DIFFERENCE_PER_TEMPLATE_SHORT_NAME = MAXIMUM_LIKELIHOOD_DIFFERENCE_PER_TEMPLATE_FULL_NAME;
+    public static final String IMPROPER_PAIR_PENALTY_FULL_NAME = "improper-pair-penalty";
+    public static final String IMPROPER_PAIR_PENALTY_SHORT_NAME = IMPROPER_PAIR_PENALTY_FULL_NAME;
+    public static final String UNMAPPED_FRAGMENT_PENALTY_FULL_NAME = "unmapped-fragment-penalty";
+    public static final String UNMAPPED_FRAGMENT_PENALITY_SHORT_NAME = UNMAPPED_FRAGMENT_PENALTY_FULL_NAME;
 
    @Argument(fullName = GAP_OPEN_COST_PARAM_FULL_NAME, shortName = GAP_OPEN_COST_PARAM_SHORT_NAME,
             doc = "Phred-scaled cost for a gap (indel) opening in a read realigned against a contig or haplotype",
@@ -61,7 +65,8 @@ public final class RealignmentScoreParameters implements Serializable {
             optional =  true)
    public double mismatchPenalty = DEFAULT_MISMATCH_COST;
 
-   @Argument(fullName = MINIMUM_MAP_QUALITY_PARAM_FULL_NAME, shortName = MINIMUM_MAP_QUALITY_PARAM_SHORT_NAME,
+   @Argument(fullName = MINIMUM_MAP_QUALITY_PARAM_FULL_NAME,
+           shortName = MINIMUM_MAP_QUALITY_PARAM_SHORT_NAME,
             doc = "Minimum mapping quality of a local read realignment interval to be considered when comparing the " +
                     "number of base calls between strands to figure out which strand the sequence aligns to",
             minValue = 0,
@@ -77,14 +82,25 @@ public final class RealignmentScoreParameters implements Serializable {
             optional = true)
    public double dominantStrandAlignedBaseCountRatio = DEFAULT_DOMINANT_ALIGNED_BASE_COUNT_RATIO;
 
-    @Argument(fullName = SHORT_INDEL_LENGTH_FULL_NAME,
-            shortName = SHORT_INDEL_LENGTH_SHORT_NAME,
-            doc = "Minimum ratio of the number of bases aligned to the actual strand vs the other strand. A sequence is supposed to " +
-                    "align to the strand whose number of base calls aligned is larger than the other strand's by at least this factor, " +
-                    "regardless of actual editing distance",
-            minValue = 1.0,
-            optional = true)
-    public int shortIndelMaxLength = SHORT_INDEL_LENGTH_DEFAULT;
+   @Argument(fullName = UNMAPPED_FRAGMENT_PENALTY_FULL_NAME,
+             shortName = UNMAPPED_FRAGMENT_PENALITY_SHORT_NAME,
+             doc = "Phred scaled score penalty for an unmapped read/fragment",
+             minValue = 0.0,
+             optional = true)
+   public double unmappedFragmentPenalty = DEFAULT_UNMAPPED_FRAGMENT_PENALTY;
+
+   @Argument(fullName = IMPROPER_PAIR_PENALTY_FULL_NAME,
+             shortName = IMPROPER_PAIR_PENALTY_SHORT_NAME,
+             doc = "Phred scaled score penalty for a read pair to have an improper orientation",
+             minValue = 0.0,
+             optional = true)
+   public double improperPairPenalty = DEFAULT_IMPROPER_PAIR_PENALTY;
+
+   @Argument(fullName = MAXIMUM_LIKELIHOOD_DIFFERENCE_PER_TEMPLATE_FULL_NAME,
+             shortName = MAXIMUM_LIKELIHOOD_DIFFERENCE_PER_TEMPLATE_SHORT_NAME,
+             minValue = 0.0,
+             optional = true)
+   public double maximumLikelihoodDifferencePerTemplate = DEFAULT_MAXIMUM_LIKELIHOOD_DIFFERENCE_PER_TEMPLATE;
 
    public RealignmentScoreParameters() {}
 }
