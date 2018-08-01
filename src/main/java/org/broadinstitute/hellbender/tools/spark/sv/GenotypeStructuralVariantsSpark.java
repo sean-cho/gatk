@@ -79,33 +79,39 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
- * Created by valentin on 4/20/17.
+ * Genotypes structural variants.
+ * <p>
+ *     This tools completes a SV discovery with the individual sample genotypes.
+ * </p>
+ *
  */
 @CommandLineProgramProperties(summary = "genotype SV variant call files",
         oneLineSummary = "genotype SV variant call files",
         programGroup = StructuralVariantDiscoveryProgramGroup.class)
 public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
 
-    public static final String FASTQ_FILE_DIR_SHORT_NAME = "fastqDir";
-    public static final String FASTQ_FILE_DIR_FULL_NAME = "fastqAssemblyDirectory";
+    public static final String FASTQ_FILE_DIR_SHORT_NAME = "fastq-dir";
+    public static final String FASTQ_FILE_DIR_FULL_NAME = "fastq-assembly-directory";
     public static final String HAP_AND_CTG_FILE_SHORT_NAME = "assemblies";
-    public static final String HAP_AND_CTG_FILE_FULL_NAME = "haplotypesAndContigsFile";
-    public static final String OUTPUT_ALIGNMENT_SHORT_NAME = "outputAlignment";
-    public static final String OUTPUT_ALIGNMENT_FULL_NAME = "outputAlignmentFile";
+    public static final String HAP_AND_CTG_FILE_FULL_NAME = "haplotypes-and-contigs-file";
+    public static final String OUTPUT_ALIGNMENT_SHORT_NAME = "output-alignment";
+    public static final String OUTPUT_ALIGNMENT_FULL_NAME = "output-alignment-file";
     public static final String SHARD_SIZE_SHORT_NAME = "shard";
-    public static final String SHARD_SIZE_FULL_NAME = "shardSize";
-    public static final String INSERT_SIZE_DISTR_SHORT_NAME = "insSize";
-    public static final String INSERT_SIZE_DISTR_FULL_NAME = "insertSizeDistribution";
-    public static final String UNKNOWN_SAMPLE_NAME = "<UNKNOWN>";
-    public static final String EMIT_GENOTYPING_PERFORMANCE_STATS_SHORT_NAME = "emitGenotypingStats";
+    public static final String SHARD_SIZE_FULL_NAME = "shard-size";
+    public static final String INSERT_SIZE_DISTR_SHORT_NAME = "ins-size-dist";
+    public static final String INSERT_SIZE_DISTR_FULL_NAME = "insert-size-distribution";
+    public static final String EMIT_GENOTYPING_PERFORMANCE_STATS_SHORT_NAME = "emit-genotyping-stats";
     public static final String EMIT_GENOTYPING_PERFORMANCE_STATS_FULL_NAME = EMIT_GENOTYPING_PERFORMANCE_STATS_SHORT_NAME;
-    public static final String EMIT_STRATIFIED_LIKELIHOODS_SHORT_NAME = "emitStratifiedLikelihoods";
+    public static final String EMIT_STRATIFIED_LIKELIHOODS_SHORT_NAME = "emit-stratified-likelihoods";
     public static final String EMIT_STRATIFIED_LIKELIHOODS_FULL_NAME = EMIT_STRATIFIED_LIKELIHOODS_SHORT_NAME;
-    public static final String EMIT_STRATIFIED_ALLELE_DEPTHS_SHORT_NAME = "emitStratifiedAlleleDepthps";
+    public static final String EMIT_STRATIFIED_ALLELE_DEPTHS_SHORT_NAME = "emit-stratified-allele-depths";
     public static final String EMIT_STRATIFIED_ALLELE_DEPTHS_FULL_NAME = EMIT_STRATIFIED_ALLELE_DEPTHS_SHORT_NAME;
 
-    private static final long serialVersionUID = 1L;
+    public static final String UNKNOWN_SAMPLE_NAME = "<UNKNOWN>";
     public static final int MAX_NUMBER_OF_TEMPLATES_IN_CONTEXT = 5000;
+    private static final Pattern ASSEMBLY_NAME_ALPHAS = Pattern.compile("[a-zA-Z_]+");
+
+    private static final long serialVersionUID = 1L;
 
     @ArgumentCollection
     private RequiredVariantInputArgumentCollection variantArguments = new RequiredVariantInputArgumentCollection();
@@ -135,7 +141,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
             optional = true)
     private String outputFile = null;
 
-    @Argument(doc = "sample name",
+    @Argument(doc = "sample name. If not provided, by default is taking from the input vcf it at all present otherwise we use " + UNKNOWN_SAMPLE_NAME + " as a placeholder",
             shortName = StandardArgumentDefinitions.SAMPLE_NAME_SHORT_NAME,
             fullName = StandardArgumentDefinitions.SAMPLE_NAME_LONG_NAME,
             optional = true)
@@ -183,7 +189,6 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
 
     private VariantsSparkSource variantsSource;
     private ReadsSparkSource haplotypesAndContigsSource;
-    public static final Pattern ASSEMBLY_NAME_ALPHAS = Pattern.compile("[a-zA-Z_]+");
     private int parallelism = 0;
 
     @Override
@@ -209,7 +214,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         private final Locatable location;
         private final E element;
 
-        public Localized(final E element, final Locatable location) {
+        private Localized(final E element, final Locatable location) {
             this.location = location;
             this.element = element;
         }
@@ -262,7 +267,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                 .mapToPair(tuple -> new Tuple2<>(tuple._1().get(), Utils.stream(tuple._2().iterator()).map(Localized::get).collect(Collectors.toList())));
 
         final String fastqDir = this.fastqDir;
-        final String fastqFileFormat = "asm%06d.fastq";
+        final String fastqFileNameFormat = "asm%06d.fastq";
+
         final Broadcast<SAMSequenceDictionary> dictionaryBroadcast = ctx.broadcast(getReferenceSequenceDictionary());
         final Broadcast<SVIntervalLocator> locatorBroadcast = ctx.broadcast(SVIntervalLocator.of(getReferenceSequenceDictionary()));
         final Broadcast<InsertSizeDistribution> insertSizeDistributionBroadcast = ctx.broadcast(insertSizeDistribution);
@@ -272,7 +278,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         final JavaRDD<SVGenotypingContext> variantHaplotypesAndTemplates =
                 variantAndHaplotypes.mapPartitions(it -> {
                     final SAMSequenceDictionary dictionary = dictionaryBroadcast.getValue();
-                    final AssemblyCollection assemblyCollection = new AssemblyCollection(fastqDir, fastqFileFormat);
+                    final AssemblyCollection assemblyCollection = new AssemblyCollection(fastqDir, fastqFileNameFormat);
                     final SVIntervalLocator locator = locatorBroadcast.getValue();
                     final InsertSizeDistribution insertSizeDistribution = insertSizeDistributionBroadcast.getValue();
                     return Utils.stream(it)
@@ -568,13 +574,13 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         if (context.variant.isInsertion()) {
             final int length = context.variant.getStructuralVariantLength();
             final double insertAverageSize = insertSizeDistribution.average();
-            genotypeCalculator.setRelativeAlleleFrequency(new double[]{insertAverageSize, Math.min(2 * insertAverageSize, insertAverageSize + length)});
+            genotypeCalculator.setRelativeAlleleFrequency(insertAverageSize, Math.min(2 * insertAverageSize, insertAverageSize + length));
         } else if (context.variant.isDeletion()) {
             final double insertAverageSize = insertSizeDistribution.average();
             final int length = context.variant.getStructuralVariantLength();
-            genotypeCalculator.setRelativeAlleleFrequency(new double[]{Math.min(insertAverageSize * 2, insertAverageSize + length), insertAverageSize});
+            genotypeCalculator.setRelativeAlleleFrequency(Math.min(insertAverageSize * 2, insertAverageSize + length), insertAverageSize);
         } else {
-            genotypeCalculator.setRelativeAlleleFrequency(null); //reset to default uniform.
+            genotypeCalculator.resetRelativeAlleleFrequency(); //reset to default uniform.
         }
     }
 
@@ -590,6 +596,13 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         }
     }
 
+    /**
+     * Often when we realign reads versus the reference haplotype, that is a small part of the full reference,
+     * some of these reads map differently with full confidence (mq == 60). We shall consider these mappings not trust-worthy
+     * and set the MQ to 0 so that they don't have effect on likelihoods in the end.
+     * @param context the genotyping context.
+     * @param scoreTable the mapping score table with the remap information.
+     */
     private static void setMappingQualityToZeroForFragmentsThatMapDifferentlyOnFullReference(final SVGenotypingContext context, final TemplateMappingTable scoreTable) {
         for (int t = 0; t < context.numberOfTemplates; t++) {
             for (int f = 0; f < 2; f++) {
@@ -644,18 +657,18 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
             final BwaMemAligner aligner = new BwaMemAligner(index);
             aligner.alignPairs();
             aligner.dontInferPairEndStats();
-            // Interestingly it turns out that either allow bwa to infer the insert size or provide yoursel
-            // results in reducced accuracy!!! I think that this and indication that is best not to try t
+            // Interestingly it turns out that either allow bwa to infer the insert size or provide it yourself
+            // results in reduced accuracy!!! I think that this and indication that is best not to try t
             // recover with SW unmapped mates as perhaps their alignment will always be relative poor and just "mud the already muddy waters"
             //aligner.setProperPairEndStats(new BwaMemPairEndStats(insertSizeDistribution.average(),
             //        insertSizeDistribution.stddev(), insertSizeDistribution.quantile(0.01),
             //        insertSizeDistribution.quantile(0.99)));
             final List<List<BwaMemAlignment>> alignments = aligner.alignSeqs(sequences);
             final IntFunction<String> haplotypeName = i -> i == 0 ? haplotype.getName() : null;
-            for (int i = 0; i < context.numberOfTemplates; i++) {
+            for (int i = 0, offset = 0; i < context.numberOfTemplates; i++) {
                 final Template template = context.templates.get(i);
-                final List<BwaMemAlignment> firstAlignment = alignments.get(i * 2);
-                final List<BwaMemAlignment> secondAlignment = alignments.get(i * 2 + 1);
+                final List<BwaMemAlignment> firstAlignment = alignments.get(offset++);
+                final List<BwaMemAlignment> secondAlignment = alignments.get(offset++);
                 final List<AlignmentInterval> firstIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(firstAlignment, haplotypeName, template.fragments().get(0).length());
                 final List<AlignmentInterval> secondIntervals = BwaMemAlignmentUtils.toAlignmentIntervals(secondAlignment, haplotypeName, template.fragments().get(1).length());
 
@@ -668,7 +681,17 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         return scoreTable;
     }
 
-    private static ReadLikelihoods<SVGenotypingContext.Allele> calculateSplitReadLikelihoods(final SVGenotypingContext context, final RealignmentScoreParameters realignmentScoreArguments,
+    /**
+     * Caculate the likelihoods associated with the way individual template read/fragments map to haplotypes and contigs.
+     * <p>The only aspect that pair-information that is being used here is that both reads in a template are considered to be part
+     * of the same haplotype and a mixture is not possible; insert-size or pair orientation are not relevant here</p>
+     * @param context genotyping context.
+     * @param realignmentScoreArguments realignment scoring parameters.
+     * @param scoreTable the re-mapping score-table.
+     * @return never {@code null}.
+     */
+    private static ReadLikelihoods<SVGenotypingContext.Allele> calculateSplitReadLikelihoods(final SVGenotypingContext context,
+                                                                                             final RealignmentScoreParameters realignmentScoreArguments,
                                                                                              final TemplateMappingTable scoreTable) {
 
         final ReadLikelihoods<SVGenotypingContext.Allele> likelihoods = context.newLikelihoods();
@@ -702,7 +725,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
             double haplotypeRefScore = RealignmentScore.calculate(realignmentScoreArguments, context.haplotypes.get(context.refHaplotypeIndex).getBases(), contig.getBases(), contig.getReferenceAlignment()).getLog10Prob();
             if (altContigNames.contains(contig.getName())) {
                 haplotypeAltScore = 0;
-                haplotypeRefScore = -60;
+                haplotypeRefScore = -.1 * realignmentScoreArguments.interHaplotypePenalty;
             }
             final double maxMQ = contig.getMinimumMappingQuality();
             final double base = Math.max(haplotypeAltScore, haplotypeRefScore);

@@ -80,11 +80,9 @@ public final class GenotypeLikelihoodCalculator {
      * the number of alleles for this calculator. Also if it contains negative or non-finite
      * values.
      */
-    public void setRelativeAlleleFrequency(final double[] value) {
-        if (value == null) {
-            relativeAlleleFrequency = null;
-            log10RelativeAlleleFrequency = null;
-        } else if (value.length != alleleCount) {
+    public void setRelativeAlleleFrequency(final double ... value) {
+        Utils.nonNull(value); // just in case
+        if (value.length != alleleCount) {
             throw new IllegalArgumentException();
         } else {
             relativeAlleleFrequency = value.clone();
@@ -106,9 +104,18 @@ public final class GenotypeLikelihoodCalculator {
     }
 
     /**
-     * Return a copy of the current relative frequencies to be applied for alleles in heterozygous genotype likelihoods.
-     * @return might be {@code null} indicating the default (all equal) frequencies are to be used.
+     * Reverts relative frequencies to the default uniform.
      */
+    public void resetRelativeAlleleFrequency() {
+        relativeAlleleFrequency = null;
+        log10RelativeAlleleFrequency = null;
+    }
+
+
+        /**
+         * Return a copy of the current relative frequencies to be applied for alleles in heterozygous genotype likelihoods.
+         * @return might be {@code null} indicating the default (all equal) frequencies are to be used.
+         */
     public double[] getRelativeAlleleFrequency() {
         return relativeAlleleFrequency != null ? relativeAlleleFrequency.clone() : null;
     }

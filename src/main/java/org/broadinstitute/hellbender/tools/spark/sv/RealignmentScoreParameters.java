@@ -7,10 +7,10 @@ import java.io.Serializable;
 /**
  * Created by valentin on 6/1/18.
  */
+@SuppressWarnings("WeakerAccess")
 public final class RealignmentScoreParameters implements Serializable {
 
     private static final long serialVersionUID = -1L;
-
 
     public static final double DEFAULT_MATCH_COST = 0;
     public static final double DEFAULT_MISMATCH_COST = 40;
@@ -21,6 +21,7 @@ public final class RealignmentScoreParameters implements Serializable {
     public static final double DEFAULT_UNMAPPED_FRAGMENT_PENALTY = 60;
     public static final double DEFAULT_IMPROPER_PAIR_PENALTY = 20;
     public static final double DEFAULT_MAXIMUM_LIKELIHOOD_DIFFERENCE_PER_TEMPLATE = 120;
+    public static final double DEFAULT_INTER_HAPLOTYPE_PENALTY = 60;
 
     public static final String GAP_OPEN_COST_PARAM_FULL_NAME = "realignment-gap-open-penalty";
     public static final String GAP_OPEN_COST_PARAM_SHORT_NAME = GAP_OPEN_COST_PARAM_FULL_NAME;
@@ -40,6 +41,8 @@ public final class RealignmentScoreParameters implements Serializable {
     public static final String IMPROPER_PAIR_PENALTY_SHORT_NAME = IMPROPER_PAIR_PENALTY_FULL_NAME;
     public static final String UNMAPPED_FRAGMENT_PENALTY_FULL_NAME = "unmapped-fragment-penalty";
     public static final String UNMAPPED_FRAGMENT_PENALITY_SHORT_NAME = UNMAPPED_FRAGMENT_PENALTY_FULL_NAME;
+    public static final String INTER_HAPLOTYPE_PENALTY_FULL_NAME = "inter-haplotype-penalty";
+    public static final String INTER_HAPLOTYPE_PENALTY_SHORT_NAME = INTER_HAPLOTYPE_PENALTY_FULL_NAME;
 
    @Argument(fullName = GAP_OPEN_COST_PARAM_FULL_NAME, shortName = GAP_OPEN_COST_PARAM_SHORT_NAME,
             doc = "Phred-scaled cost for a gap (indel) opening in a read realigned against a contig or haplotype",
@@ -102,5 +105,12 @@ public final class RealignmentScoreParameters implements Serializable {
              optional = true)
    public double maximumLikelihoodDifferencePerTemplate = DEFAULT_MAXIMUM_LIKELIHOOD_DIFFERENCE_PER_TEMPLATE;
 
-   public RealignmentScoreParameters() {}
+   @Argument(fullName = INTER_HAPLOTYPE_PENALTY_FULL_NAME,
+             shortName = INTER_HAPLOTYPE_PENALTY_SHORT_NAME,
+             doc = "score penalty imposed for a mapping of a haplotype vs another",
+             minValue = 0.0,
+             optional = true)
+   public double interHaplotypePenalty = DEFAULT_INTER_HAPLOTYPE_PENALTY;
+
+    public RealignmentScoreParameters() {}
 }
