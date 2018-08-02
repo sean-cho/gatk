@@ -56,7 +56,7 @@ public class StructuralVariationDiscoveryPipelineSparkIntegrationTest extends Co
             return  " -R " + SVIntegrationTestDataProvider.reference_2bit +
                     " -I " + bamLoc +
                     " -O " + outputDir + "/StructuralVariationDiscoveryPipelineSparkIntegrationTest/" +
-            " --aligner-index-image " + alignerRefIndexImgLoc +
+                    " --aligner-index-image " + alignerRefIndexImgLoc +
                     " --kmers-to-ignore " + kmerIgnoreListLoc +
                     " --contig-sam-file "       + outputDir + "/assemblies.bam" +
                     " --breakpoint-intervals " + outputDir + "/intervals" +
