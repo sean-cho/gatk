@@ -21,15 +21,11 @@ public final class AnnotatedIntervalCollection extends AbstractLocatableCollecti
      * CONTIG, START, END, and columns headers given by {@link AnnotationCollection}
      */
     enum AnnotatedIntervalTableColumn {
-        CONTIG(String.class),
-        START(Integer.class),
-        END(Integer.class),
-        GC_CONTENT(Double.class);
+        CONTIG,
+        START,
+        END;
 
-        static final TableColumnCollection COLUMNS = new TableColumnCollection((Object[]) values());
-
-        AnnotatedIntervalTableColumn(final Class<?> clazz) {
-        }
+        static final TableColumnCollection STANDARD_COLUMNS = new TableColumnCollection((Object[]) values());
     }
     
     private static final Function<DataLine, AnnotatedInterval> ANNOTATED_INTERVAL_RECORD_FROM_DATA_LINE_DECODER = dataLine -> {
@@ -59,4 +55,6 @@ public final class AnnotatedIntervalCollection extends AbstractLocatableCollecti
                                        final List<AnnotatedInterval> annotatedIntervals) {
         super(metadata, annotatedIntervals, AnnotatedIntervalCollection.AnnotatedIntervalTableColumn.COLUMNS, ANNOTATED_INTERVAL_RECORD_FROM_DATA_LINE_DECODER, ANNOTATED_INTERVAL_RECORD_TO_DATA_LINE_ENCODER);
     }
+
+    private static TableColumnCollection construct
 }
