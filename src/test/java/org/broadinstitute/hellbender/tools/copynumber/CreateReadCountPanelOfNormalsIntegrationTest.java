@@ -18,7 +18,7 @@ import org.broadinstitute.hellbender.tools.copynumber.formats.collections.Simple
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.SimpleLocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.SimpleSampleLocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotatedInterval;
-import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotationSet;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotationCollection;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.SimpleCount;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.testutils.ArgumentsBuilder;
@@ -102,7 +102,7 @@ public final class CreateReadCountPanelOfNormalsIntegrationTest extends CommandL
         final AnnotatedIntervalCollection annotatedIntervals = new AnnotatedIntervalCollection(
                 new SimpleLocatableMetadata(SEQUENCE_DICTIONARY),
                 IntStream.range(0, NUM_INTERVALS)
-                        .mapToObj(i -> new AnnotatedInterval(intervals.get(i), new AnnotationSet(intervalGCContent[i])))
+                        .mapToObj(i -> new AnnotatedInterval(intervals.get(i), new AnnotationCollection(intervalGCContent[i])))
                         .collect(Collectors.toList()));
         final File annotatedIntervalsFile = createTempFile("annotated-intervals", ".tsv");
         annotatedIntervals.write(annotatedIntervalsFile);

@@ -1,7 +1,6 @@
 package org.broadinstitute.hellbender.tools.copynumber.formats.records;
 
 import htsjdk.samtools.util.Locatable;
-import htsjdk.tribble.Feature;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 
@@ -10,14 +9,14 @@ import org.broadinstitute.hellbender.utils.Utils;
  *
  * @author Samuel Lee &lt;slee@broadinstitute.org&gt;
  */
-public class AnnotatedInterval implements Locatable, Feature {
+public class AnnotatedInterval implements Locatable {
     private final SimpleInterval interval;
-    private final AnnotationSet annotationSet;
+    private final AnnotationCollection annotationCollection;
 
     public AnnotatedInterval(final SimpleInterval interval,
-                             final AnnotationSet annotationSet) {
+                             final AnnotationCollection annotationCollection) {
         this.interval = Utils.nonNull(interval);
-        this.annotationSet = Utils.nonNull(annotationSet);
+        this.annotationCollection = Utils.nonNull(annotationCollection);
     }
 
     @Override
@@ -39,8 +38,8 @@ public class AnnotatedInterval implements Locatable, Feature {
         return interval;
     }
 
-    public AnnotationSet getAnnotationSet() {
-        return annotationSet;
+    public AnnotationCollection getAnnotationCollection() {
+        return annotationCollection;
     }
 
     @Override
@@ -53,13 +52,13 @@ public class AnnotatedInterval implements Locatable, Feature {
         }
 
         final AnnotatedInterval that = (AnnotatedInterval) o;
-        return interval.equals(that.interval) && annotationSet.equals(that.annotationSet);
+        return interval.equals(that.interval) && annotationCollection.equals(that.annotationCollection);
     }
 
     @Override
     public int hashCode() {
         int result = interval.hashCode();
-        result = 31 * result + annotationSet.hashCode();
+        result = 31 * result + annotationCollection.hashCode();
         return result;
     }
 
@@ -67,7 +66,7 @@ public class AnnotatedInterval implements Locatable, Feature {
     public String toString() {
         return "AnnotatedInterval{" +
                 "interval=" + interval +
-                ", annotationSet=" + annotationSet +
+                ", annotationCollection=" + annotationCollection +
                 '}';
     }
 }

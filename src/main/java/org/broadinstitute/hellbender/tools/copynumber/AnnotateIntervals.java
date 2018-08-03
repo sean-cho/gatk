@@ -13,7 +13,7 @@ import org.broadinstitute.hellbender.tools.copynumber.arguments.CopyNumberArgume
 import org.broadinstitute.hellbender.tools.copynumber.formats.collections.AnnotatedIntervalCollection;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.SimpleLocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotatedInterval;
-import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotationSet;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotationCollection;
 import org.broadinstitute.hellbender.utils.IntervalMergingRule;
 import org.broadinstitute.hellbender.utils.Nucleotide;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
@@ -113,7 +113,7 @@ public final class AnnotateIntervals extends GATKTool {
         intervals.forEach(interval -> {
             annotatedIntervalList.add(new AnnotatedInterval(
                     interval,
-                    new AnnotationSet(gcContentAnnotator.apply(
+                    new AnnotationCollection(gcContentAnnotator.apply(
                             interval, null, new ReferenceContext(reference, interval), null))));
             progressMeter.update(interval);
         });
@@ -137,6 +137,21 @@ public final class AnnotateIntervals extends GATKTool {
     }
 
     private class GCContentAnnotator implements IntervalAnnotator<Double> {
+        @Override
+        public Double apply(final Locatable interval,
+                            final ReadsContext readsContext,
+                            final ReferenceContext referenceContext,
+                            final FeatureContext featureContext) {
+            final Nucleotide.Counter counter = new Nucleotide.Counter();
+            counter.addAll(referenceContext.getBases());
+            final long gcCount = counter.get(Nucleotide.C) + counter.get(Nucleotide.G);
+            final long atCount = counter.get(Nucleotide.A) + counter.get(Nucleotide.T);
+            final long totalCount = gcCount + atCount;
+            return totalCount == 0 ? Double.NaN : gcCount / (double) totalCount;
+        }
+    }
+
+    private class MappabilityAnnotator implements IntervalAnnotator<Double> {
         @Override
         public Double apply(final Locatable interval,
                             final ReadsContext readsContext,

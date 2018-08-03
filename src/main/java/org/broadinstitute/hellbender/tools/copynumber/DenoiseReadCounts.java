@@ -210,7 +210,7 @@ public final class DenoiseReadCounts extends CommandLineProgram {
                     inputAnnotatedIntervalsFile, readCounts, logger);
             final double[] intervalGCContent = annotatedIntervals == null
                     ? null
-                    : annotatedIntervals.getRecords().stream().mapToDouble(i -> i.getAnnotationSet().getGCContent()).toArray();
+                    : annotatedIntervals.getRecords().stream().mapToDouble(i -> i.getAnnotationCollection().getGCContent()).toArray();
 
             if (intervalGCContent == null) {
                 logger.warn("Neither a panel of normals nor GC-content annotations were provided, so only standardization will be performed...");

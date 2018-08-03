@@ -280,7 +280,7 @@ public final class CreateReadCountPanelOfNormals extends SparkCommandLineProgram
                 inputAnnotatedIntervalsFile, firstReadCounts, logger);
         final double[] intervalGCContent = annotatedIntervals == null
                 ? null
-                : annotatedIntervals.getRecords().stream().mapToDouble(i -> i.getAnnotationSet().getGCContent()).toArray();
+                : annotatedIntervals.getRecords().stream().mapToDouble(i -> i.getAnnotationCollection().getGCContent()).toArray();
 
         //validate input read-counts files (i.e., check intervals and that only integer counts are contained)
         //and aggregate as a RealMatrix with dimensions numIntervals x numSamples
