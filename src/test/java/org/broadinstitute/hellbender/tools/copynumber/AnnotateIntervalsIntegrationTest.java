@@ -1,6 +1,7 @@
 package org.broadinstitute.hellbender.tools.copynumber;
 
 import htsjdk.samtools.SAMSequenceDictionary;
+import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.hellbender.CommandLineProgramTest;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.argumentcollections.IntervalArgumentCollection;
@@ -9,7 +10,7 @@ import org.broadinstitute.hellbender.tools.copynumber.formats.collections.Annota
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.LocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.SimpleLocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotatedInterval;
-import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotationCollection;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotationMap;
 import org.broadinstitute.hellbender.utils.IntervalMergingRule;
 import org.broadinstitute.hellbender.utils.IntervalSetRule;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
@@ -19,6 +20,7 @@ import org.testng.annotations.Test;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.Collections;
 
 /**
  * Integration tests for {@link AnnotateIntervals}.
@@ -46,17 +48,25 @@ public final class AnnotateIntervalsIntegrationTest extends CommandLineProgramTe
                 .addArgument(IntervalArgumentCollection.INTERVAL_MERGING_RULE_LONG_NAME, IntervalMergingRule.OVERLAPPING_ONLY.toString())
                 .addOutput(outputFile);
         runCommandLine(argsBuilder);
-        final AnnotatedIntervalCollection result = new AnnotatedIntervalCollection(outputFile);
+        final AnnotatedIntervalCollection result = new AnnotatedIntervalCollection(
+                outputFile,
+                Collections.singletonList(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY));
 
         final AnnotatedIntervalCollection expected = new AnnotatedIntervalCollection(
                 LOCATABLE_METADATA,
                 Arrays.asList(
-                        new AnnotatedInterval(new SimpleInterval("20", 1000001,	1001000), new AnnotationCollection(0.49)),
-                        new AnnotatedInterval(new SimpleInterval("20", 1001001,	1002000), new AnnotationCollection(0.483)),
-                        new AnnotatedInterval(new SimpleInterval("20", 1002001,	1003000), new AnnotationCollection(0.401)),
-                        new AnnotatedInterval(new SimpleInterval("20", 1003001,	1004000), new AnnotationCollection(0.448)),
-                        new AnnotatedInterval(new SimpleInterval("21", 1,	100), new AnnotationCollection(Double.NaN)),
-                        new AnnotatedInterval(new SimpleInterval("21", 101,	200), new AnnotationCollection(Double.NaN))));
+                        new AnnotatedInterval(new SimpleInterval("20", 1000001,	1001000),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, 0.49)))),
+                        new AnnotatedInterval(new SimpleInterval("20", 1001001,	1002000),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, 0.483)))),
+                        new AnnotatedInterval(new SimpleInterval("20", 1002001,	1003000),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, 0.401)))),
+                        new AnnotatedInterval(new SimpleInterval("20", 1003001,	1004000),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, 0.448)))),
+                        new AnnotatedInterval(new SimpleInterval("21", 1,	100),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, Double.NaN)))),
+                        new AnnotatedInterval(new SimpleInterval("21", 101,	200),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, Double.NaN))))));
         Assert.assertEquals(result, expected);
         Assert.assertNotSame(result, expected);
     }

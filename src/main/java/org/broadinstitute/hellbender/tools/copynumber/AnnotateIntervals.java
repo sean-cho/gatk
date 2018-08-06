@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.copynumber;
 
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.util.Locatable;
+import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.BetaFeature;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
@@ -13,7 +14,7 @@ import org.broadinstitute.hellbender.tools.copynumber.arguments.CopyNumberArgume
 import org.broadinstitute.hellbender.tools.copynumber.formats.collections.AnnotatedIntervalCollection;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.SimpleLocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotatedInterval;
-import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotationCollection;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotationMap;
 import org.broadinstitute.hellbender.utils.IntervalMergingRule;
 import org.broadinstitute.hellbender.utils.Nucleotide;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
@@ -21,10 +22,11 @@ import org.broadinstitute.hellbender.utils.SimpleInterval;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * Annotates intervals with GC content.  The output may optionally be used as input to
- * {@link CreateReadCountPanelOfNormals} or {@link DenoiseReadCounts}.  In the former case,
+ * Annotates intervals with GC content and (optionally) mappability.  The output may optionally be used as input to
+ * {@link CreateReadCountPanelOfNormals}, {@link DenoiseReadCounts}, and {@link GermlineCNVCaller}.  In the case,
  * using the resulting panel as input to {@link DenoiseReadCounts} will perform explicit GC-bias correction.
  *
  * <h3>Inputs</h3>
@@ -78,7 +80,7 @@ public final class AnnotateIntervals extends GATKTool {
             fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME
     )
-    protected File outputAnnotatedIntervalsFile;
+    private File outputAnnotatedIntervalsFile;
 
     @Override
     public boolean requiresReference() {
@@ -93,7 +95,7 @@ public final class AnnotateIntervals extends GATKTool {
     private List<SimpleInterval> intervals;
     private SAMSequenceDictionary sequenceDictionary;
     private ReferenceDataSource reference;
-    private final GCContentAnnotator gcContentAnnotator = new GCContentAnnotator();
+    private List<IntervalAnnotator<?>> annotators = new ArrayList<>();
     private AnnotatedIntervalCollection annotatedIntervals;
 
     @Override
@@ -103,20 +105,29 @@ public final class AnnotateIntervals extends GATKTool {
         logger.info("Loading intervals for annotation...");
         sequenceDictionary = getBestAvailableSequenceDictionary();
         intervals = intervalArgumentCollection.getIntervals(sequenceDictionary);
+
+        logger.info("Loading resources for annotation...");
         reference = ReferenceDataSource.of(referenceArguments.getReferencePath());  //the GATKTool ReferenceDataSource is package-protected, so we cannot access it directly
+
+        annotators.add(new GCContentAnnotator());
+
         logger.info("Annotating intervals...");
     }
 
     @Override
     public void traverse() {
         final List<AnnotatedInterval> annotatedIntervalList = new ArrayList<>(intervals.size());
-        intervals.forEach(interval -> {
-            annotatedIntervalList.add(new AnnotatedInterval(
-                    interval,
-                    new AnnotationCollection(gcContentAnnotator.apply(
-                            interval, null, new ReferenceContext(reference, interval), null))));
+        for (final SimpleInterval interval : intervals) {
+            final ReferenceContext referenceContext = new ReferenceContext(reference, interval);
+            final AnnotationMap annotations = new AnnotationMap(annotators.stream()
+                    .collect(Collectors.mapping(
+                            a -> Pair.of(
+                                    a.getAnnotationKey(),
+                                    a.apply(interval, null, referenceContext, null)),
+                            Collectors.toList())));
+            annotatedIntervalList.add(new AnnotatedInterval(interval, annotations));
             progressMeter.update(interval);
-        });
+        }
         annotatedIntervals = new AnnotatedIntervalCollection(new SimpleLocatableMetadata(sequenceDictionary), annotatedIntervalList);
     }
 
@@ -127,16 +138,34 @@ public final class AnnotateIntervals extends GATKTool {
         return super.onTraversalSuccess();
     }
 
-    //if additional annotators are added to this tool, they should follow this interface
-    //(and validation that the required resources are available should be performed)
-    private interface IntervalAnnotator<T> {
+    /**
+     * If additional annotators are added to this tool, they should follow this interface.
+     * Validation that the required resources are available should be performed before
+     * calling {@link IntervalAnnotator#apply}.
+     */
+    interface IntervalAnnotator<T> {
+        AnnotationMap.AnnotationKey<T> getAnnotationKey();
+
+        /**
+         * The returned value should be validated using {@link AnnotationMap.AnnotationKey#validate}.
+         */
         T apply(final Locatable interval,
                 final ReadsContext readsContext,
                 final ReferenceContext referenceContext,
                 final FeatureContext featureContext);
     }
 
-    private class GCContentAnnotator implements IntervalAnnotator<Double> {
+    public static class GCContentAnnotator implements IntervalAnnotator<Double> {
+        public static final AnnotationMap.AnnotationKey<Double> ANNOTATION_KEY = new AnnotationMap.AnnotationKey<>(
+                "GC_CONTENT",
+                Double.class,
+                gcContent -> (0. <= gcContent && gcContent <= 1.) || Double.isNaN(gcContent));
+
+        @Override
+        public AnnotationMap.AnnotationKey<Double> getAnnotationKey() {
+            return ANNOTATION_KEY;
+        }
+
         @Override
         public Double apply(final Locatable interval,
                             final ReadsContext readsContext,
@@ -147,22 +176,27 @@ public final class AnnotateIntervals extends GATKTool {
             final long gcCount = counter.get(Nucleotide.C) + counter.get(Nucleotide.G);
             final long atCount = counter.get(Nucleotide.A) + counter.get(Nucleotide.T);
             final long totalCount = gcCount + atCount;
-            return totalCount == 0 ? Double.NaN : gcCount / (double) totalCount;
+            final double gcContent = totalCount == 0 ? Double.NaN : gcCount / (double) totalCount;
+            return getAnnotationKey().validate(gcContent);
         }
     }
 
-    private class MappabilityAnnotator implements IntervalAnnotator<Double> {
+    public static class MappabilityAnnotator implements IntervalAnnotator<Double> {
+        @Override
+        public AnnotationMap.AnnotationKey<Double> getAnnotationKey() {
+            return new AnnotationMap.AnnotationKey<>(
+                    "MAPPABILITY",
+                    Double.class,
+                    mappability -> (0. <= mappability && mappability <= 1.) || Double.isNaN(mappability));
+        }
+
         @Override
         public Double apply(final Locatable interval,
                             final ReadsContext readsContext,
                             final ReferenceContext referenceContext,
                             final FeatureContext featureContext) {
-            final Nucleotide.Counter counter = new Nucleotide.Counter();
-            counter.addAll(referenceContext.getBases());
-            final long gcCount = counter.get(Nucleotide.C) + counter.get(Nucleotide.G);
-            final long atCount = counter.get(Nucleotide.A) + counter.get(Nucleotide.T);
-            final long totalCount = gcCount + atCount;
-            return totalCount == 0 ? Double.NaN : gcCount / (double) totalCount;
+            // TODO
+            return Double.NaN;
         }
     }
 }

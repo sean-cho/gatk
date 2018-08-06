@@ -11,12 +11,12 @@ import org.broadinstitute.hellbender.utils.Utils;
  */
 public class AnnotatedInterval implements Locatable {
     private final SimpleInterval interval;
-    private final AnnotationCollection annotationCollection;
+    private final AnnotationMap annotationMap;
 
     public AnnotatedInterval(final SimpleInterval interval,
-                             final AnnotationCollection annotationCollection) {
+                             final AnnotationMap annotationMap) {
         this.interval = Utils.nonNull(interval);
-        this.annotationCollection = Utils.nonNull(annotationCollection);
+        this.annotationMap = Utils.nonNull(annotationMap);
     }
 
     @Override
@@ -38,8 +38,8 @@ public class AnnotatedInterval implements Locatable {
         return interval;
     }
 
-    public AnnotationCollection getAnnotationCollection() {
-        return annotationCollection;
+    public AnnotationMap getAnnotationMap() {
+        return annotationMap;
     }
 
     @Override
@@ -52,13 +52,13 @@ public class AnnotatedInterval implements Locatable {
         }
 
         final AnnotatedInterval that = (AnnotatedInterval) o;
-        return interval.equals(that.interval) && annotationCollection.equals(that.annotationCollection);
+        return interval.equals(that.interval) && annotationMap.equals(that.annotationMap);
     }
 
     @Override
     public int hashCode() {
         int result = interval.hashCode();
-        result = 31 * result + annotationCollection.hashCode();
+        result = 31 * result + annotationMap.hashCode();
         return result;
     }
 
@@ -66,7 +66,7 @@ public class AnnotatedInterval implements Locatable {
     public String toString() {
         return "AnnotatedInterval{" +
                 "interval=" + interval +
-                ", annotationCollection=" + annotationCollection +
+                ", annotationMap=" + annotationMap +
                 '}';
     }
 }
