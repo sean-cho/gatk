@@ -71,6 +71,44 @@ public final class AnnotateIntervalsIntegrationTest extends CommandLineProgramTe
         Assert.assertNotSame(result, expected);
     }
 
+    /**
+     * Test that intervals are sorted according to {@link #SEQUENCE_DICTIONARY}
+     * and adjacent intervals are not merged.  GC content truth was taken from AnnotateTargets (a previous version of the tool).
+     */
+    @Test
+    public void testMappability() {
+        final File outputFile = createTempFile("annotate-intervals-test", ".tsv");
+        final ArgumentsBuilder argsBuilder = new ArgumentsBuilder()
+                .addReference(REFERENCE_FILE)
+                .addArgument(AnnotateIntervals.MAPPABILITY_TRACK_PATH_LONG_NAME, "/home/BROAD.MIT.EDU/slee/Downloads/k100.umap.bed.gz")
+//                .addArgument(AnnotateIntervals.MAPPABILITY_TRACK_PATH_LONG_NAME, "/home/BROAD.MIT.EDU/slee/Downloads/hg19.umap.k100.bed")
+                .addArgument(StandardArgumentDefinitions.INTERVALS_LONG_NAME, INTERVALS_FILE.getAbsolutePath())
+                .addArgument(IntervalArgumentCollection.INTERVAL_MERGING_RULE_LONG_NAME, IntervalMergingRule.OVERLAPPING_ONLY.toString())
+                .addOutput(outputFile);
+        runCommandLine(argsBuilder);
+        final AnnotatedIntervalCollection result = new AnnotatedIntervalCollection(
+                outputFile,
+                Collections.singletonList(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY));
+
+        final AnnotatedIntervalCollection expected = new AnnotatedIntervalCollection(
+                LOCATABLE_METADATA,
+                Arrays.asList(
+                        new AnnotatedInterval(new SimpleInterval("20", 1000001,	1001000),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, 0.49)))),
+                        new AnnotatedInterval(new SimpleInterval("20", 1001001,	1002000),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, 0.483)))),
+                        new AnnotatedInterval(new SimpleInterval("20", 1002001,	1003000),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, 0.401)))),
+                        new AnnotatedInterval(new SimpleInterval("20", 1003001,	1004000),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, 0.448)))),
+                        new AnnotatedInterval(new SimpleInterval("21", 1,	100),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, Double.NaN)))),
+                        new AnnotatedInterval(new SimpleInterval("21", 101,	200),
+                                new AnnotationMap(Collections.singletonList(Pair.of(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY, Double.NaN))))));
+        Assert.assertEquals(result, expected);
+        Assert.assertNotSame(result, expected);
+    }
+
     @Test(expectedExceptions = IllegalArgumentException.class)
     public void testIntervalSetRule() {
         final File resultOutputFile = createTempFile("annotate-intervals-test", ".tsv");

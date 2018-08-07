@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.copynumber;
 
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.util.Locatable;
+import htsjdk.tribble.bed.BEDFeature;
 import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.BetaFeature;
@@ -76,12 +77,21 @@ import java.util.stream.Collectors;
 @DocumentedFeature
 @BetaFeature
 public final class AnnotateIntervals extends GATKTool {
+    public static final String MAPPABILITY_TRACK_PATH_LONG_NAME = "mappability-track";
+
     @Argument(
             doc = "Output file for annotated intervals.",
             fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME
     )
     private File outputAnnotatedIntervalsFile;
+
+    @Argument(
+            doc = "Path to Umap multi-read mappability track (see https://bismap.hoffmanlab.org/).",
+            fullName = MAPPABILITY_TRACK_PATH_LONG_NAME,
+            optional = true
+    )
+    private FeatureInput<BEDFeature> mappabilityTrackPath;
 
     @Override
     public boolean requiresReference() {
@@ -96,6 +106,7 @@ public final class AnnotateIntervals extends GATKTool {
     private List<SimpleInterval> intervals;
     private SAMSequenceDictionary sequenceDictionary;
     private ReferenceDataSource reference;
+    private FeatureManager features;
     private List<IntervalAnnotator<?>> annotators = new ArrayList<>();
     private AnnotatedIntervalCollection annotatedIntervals;
 
@@ -109,8 +120,20 @@ public final class AnnotateIntervals extends GATKTool {
 
         logger.info("Loading resources for annotation...");
         reference = ReferenceDataSource.of(referenceArguments.getReferencePath());  //the GATKTool ReferenceDataSource is package-protected, so we cannot access it directly
+        features = new FeatureManager(                                              //the GATKTool FeatureManager is package-protected, so we cannot access it directly
+                this,
+                FeatureDataSource.DEFAULT_QUERY_LOOKAHEAD_BASES,
+                cloudPrefetchBuffer,
+                cloudIndexPrefetchBuffer,
+                referenceArguments.getReferencePath());
 
+        // always perform GC-content annotation
         annotators.add(new GCContentAnnotator());
+
+        // add optional annotators
+        if (mappabilityTrackPath != null) {
+            annotators.add(new MappabilityAnnotator(mappabilityTrackPath));
+        }
 
         logger.info("Annotating intervals...");
     }
@@ -120,11 +143,12 @@ public final class AnnotateIntervals extends GATKTool {
         final List<AnnotatedInterval> annotatedIntervalList = new ArrayList<>(intervals.size());
         for (final SimpleInterval interval : intervals) {
             final ReferenceContext referenceContext = new ReferenceContext(reference, interval);
+            final FeatureContext featureContext = new FeatureContext(features, interval);
             final AnnotationMap annotations = new AnnotationMap(annotators.stream()
                     .collect(Collectors.mapping(
                             a -> Pair.of(
                                     a.getAnnotationKey(),
-                                    a.apply(interval, null, referenceContext, null)),
+                                    a.applyAndValidate(interval, referenceContext, featureContext)),
                             Collectors.toList())));
             annotatedIntervalList.add(new AnnotatedInterval(interval, annotations));
             progressMeter.update(interval);
@@ -144,19 +168,21 @@ public final class AnnotateIntervals extends GATKTool {
      * Validation that the required resources are available should be performed before
      * calling {@link IntervalAnnotator#apply}.
      */
-    interface IntervalAnnotator<T> {
-        AnnotationKey<T> getAnnotationKey();
+    abstract static class IntervalAnnotator<T> {
+        public abstract AnnotationKey<T> getAnnotationKey();
 
-        /**
-         * The returned value should be validated using {@link AnnotationKey#validate}.
-         */
-        T apply(final Locatable interval,
-                final ReadsContext readsContext,
-                final ReferenceContext referenceContext,
-                final FeatureContext featureContext);
+        abstract T apply(final Locatable interval,
+                         final ReferenceContext referenceContext,
+                         final FeatureContext featureContext);
+
+        T applyAndValidate(final Locatable interval,
+                           final ReferenceContext referenceContext,
+                           final FeatureContext featureContext) {
+            return getAnnotationKey().validate(apply(interval, referenceContext, featureContext));
+        }
     }
 
-    public static class GCContentAnnotator implements IntervalAnnotator<Double> {
+    public static class GCContentAnnotator extends IntervalAnnotator<Double> {
         public static final AnnotationKey<Double> ANNOTATION_KEY = new AnnotationKey<>(
                 "GC_CONTENT",
                 Double.class,
@@ -168,21 +194,25 @@ public final class AnnotateIntervals extends GATKTool {
         }
 
         @Override
-        public Double apply(final Locatable interval,
-                            final ReadsContext readsContext,
-                            final ReferenceContext referenceContext,
-                            final FeatureContext featureContext) {
+        Double apply(final Locatable interval,
+                     final ReferenceContext referenceContext,
+                     final FeatureContext featureContext) {
             final Nucleotide.Counter counter = new Nucleotide.Counter();
             counter.addAll(referenceContext.getBases());
             final long gcCount = counter.get(Nucleotide.C) + counter.get(Nucleotide.G);
             final long atCount = counter.get(Nucleotide.A) + counter.get(Nucleotide.T);
             final long totalCount = gcCount + atCount;
-            final double gcContent = totalCount == 0 ? Double.NaN : gcCount / (double) totalCount;
-            return getAnnotationKey().validate(gcContent);
+            return totalCount == 0 ? Double.NaN : gcCount / (double) totalCount;
         }
     }
 
-    public static class MappabilityAnnotator implements IntervalAnnotator<Double> {
+    public static class MappabilityAnnotator extends IntervalAnnotator<Double> {
+        private final FeatureInput<BEDFeature> mappabilityTrackPath;
+
+        public MappabilityAnnotator(final FeatureInput<BEDFeature> mappabilityTrackPath) {
+            this.mappabilityTrackPath = mappabilityTrackPath;
+        }
+
         @Override
         public AnnotationKey<Double> getAnnotationKey() {
             return new AnnotationKey<>(
@@ -192,11 +222,10 @@ public final class AnnotateIntervals extends GATKTool {
         }
 
         @Override
-        public Double apply(final Locatable interval,
-                            final ReadsContext readsContext,
-                            final ReferenceContext referenceContext,
-                            final FeatureContext featureContext) {
-            // TODO
+        Double apply(final Locatable interval,
+                     final ReferenceContext referenceContext,
+                     final FeatureContext featureContext) {
+            featureContext.getValues(mappabilityTrackPath);
             return Double.NaN;
         }
     }
