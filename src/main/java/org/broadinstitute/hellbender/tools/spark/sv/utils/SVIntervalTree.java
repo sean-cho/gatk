@@ -120,6 +120,37 @@ public final class SVIntervalTree<V> implements Iterable<SVIntervalTree.Entry<V>
         return result;
     }
 
+    public V putIfAbsent(final SVInterval interval, final V value) {
+        V result = sentinel;
+
+        if ( root == null ) {
+            root = new Node<>(interval, value);
+        } else {
+            Node<V> parent = null;
+            Node<V> node = root;
+            int cmpVal = 0;
+
+            while ( node != null ) {
+                parent = node; // last non-null node
+                cmpVal = interval.compareTo(node.getInterval());
+                if ( cmpVal == 0 ) {
+                    break;
+                }
+                node = cmpVal < 0 ? node.getLeft() : node.getRight();
+            }
+
+            if ( cmpVal == 0 ) {
+                result = parent.getValue();
+            } else if ( cmpVal < 0 ) {
+                root = parent.insertLeft(interval, value, root);
+            } else {
+                root = parent.insertRight(interval, value, root);
+            }
+        }
+
+        return result;
+    }
+
     /**
      * Put all the elements in another tree into this one.
      * @param other the other tree.

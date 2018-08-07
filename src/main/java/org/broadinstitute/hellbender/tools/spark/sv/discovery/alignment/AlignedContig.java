@@ -10,11 +10,8 @@ import htsjdk.samtools.CigarOperator;
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.SAMTag;
 import htsjdk.samtools.util.SequenceUtil;
-import it.unimi.dsi.fastutil.ints.Int2ByteFunction;
 import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.broadinstitute.hellbender.engine.datasources.ReferenceMultiSource;
 import org.broadinstitute.hellbender.engine.datasources.ReferenceSource;
-import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.SVHaplotype;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
@@ -71,7 +68,7 @@ public final class AlignedContig {
                 Arrays.stream(read.getAttributeAsString(SAMTag.SA.name()).split(";"))
                         .filter(s -> !s.isEmpty() && !s.equals("*"))
                         .map(AlignmentInterval::new)
-                        .collect(Collectors.toList());
+                        .forEach(intervals::add);
             }
             this.alignmentIntervals = Collections.unmodifiableList(intervals);
             this.contigSequence = bases;
@@ -209,7 +206,7 @@ public final class AlignedContig {
         Utils.nonNull(name);
         this.contigName = name;
         this.contigSequence = haplotype.getBases();
-        this.alignmentIntervals = haplotype.getReferenceAlignmentIntervals();
+        this.alignmentIntervals = haplotype.getReferenceAlignment();
     }
 
     public AlignedContig(final String contigName, final byte[] contigSequence, final List<AlignmentInterval> alignmentIntervals) {

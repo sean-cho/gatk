@@ -26,7 +26,7 @@ public abstract class AbstractSVHaplotype implements SVHaplotype {
     protected final SimpleInterval variantLocation;
 
     @Override
-    public List<AlignmentInterval> getReferenceAlignmentIntervals() {
+    public List<AlignmentInterval> getReferenceAlignment() {
         return intervals;
     }
 

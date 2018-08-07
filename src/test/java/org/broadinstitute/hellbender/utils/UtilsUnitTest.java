@@ -7,6 +7,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.primitives.Ints;
 import htsjdk.samtools.util.Log.LogLevel;
+import org.apache.commons.collections4.IteratorUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.Level;
 import org.broadinstitute.hellbender.GATKBaseTest;
@@ -17,26 +18,23 @@ import org.testng.annotations.Test;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.io.Serializable;
-import java.lang.invoke.LambdaMetafactory;
-import java.lang.invoke.SerializedLambda;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.function.Function;
-import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -47,6 +45,8 @@ import static org.testng.Assert.assertEquals;
  *
  */
 public final class UtilsUnitTest extends GATKBaseTest {
+
+
 
     @Test
     public void testForceJVMLocaleToUSEnglish() {
@@ -948,7 +948,7 @@ public final class UtilsUnitTest extends GATKBaseTest {
     }
 
     @Test(dataProvider = "provideGetReverseValueToListMap")
-    public <T,U> void testGetReverseValueToListMap(final Map<T, List<U>> input,  final Map<U, Set<T>> gtOutput) {
+    public <T,U> void testGetReverseValueToListMap(final Map<T, List<U>> input, final Map<U, Set<T>> gtOutput) {
         Assert.assertEquals(Utils.getReverseValueToListMap(input), gtOutput);
     }
 
@@ -995,5 +995,98 @@ public final class UtilsUnitTest extends GATKBaseTest {
     public void testTestFilterCollectionByExpressions(Set<String> values, Collection<String> filters, boolean exactMatch, Set<String> expected) {
         Set<String> actual = Utils.filterCollectionByExpressions(values, filters, exactMatch);
         Assert.assertEquals(actual, expected);
+    }
+
+    @Test(dataProvider = "flatMapNamesToCharsData")
+    public void testFlatMapNamesToChars(final List<String> names, final List<Character> expected) {
+        final Random rdn = new Random(131);
+        final Iterator<Character> it = Utils.flatMap(names.iterator(),
+                name -> { if (name != null) {
+                    return IntStream.range(0, name.length()).mapToObj(name::charAt).iterator();
+                } else {
+                    // either way should work:
+                    return rdn.nextBoolean() ? IteratorUtils.emptyIterator() : null;
+                }
+        });
+        Assert.assertNotNull(it);
+        final List<Character> actual = Utils.stream(it).collect(Collectors.toList());
+        Assert.assertEquals(actual, expected);
+    }
+
+    @DataProvider(name = "flatMapNamesToCharsData")
+    public static Object[][] flatMapNamesToCharsData() {
+        final String[][] inputs = new String[][] {
+                {"John", "Anne", "Ronnie"},
+                { null, "John", "Eduard"},
+                { "", "Ally", null },
+                {},
+                {"", null},
+                {null},
+                {"a", "bc", "def", null }
+        };
+        final String[] outputs = new String[] {
+                "JohnAnneRonnie",
+                "JohnEduard",
+                "Ally",
+                "",
+                "",
+                "",
+                "abcdef"
+        };
+        final List<Object[]> result = new ArrayList<>(inputs.length);
+        for (int i = 0; i < inputs.length; i++) {
+            final int iFinalized = i;
+            result.add(new Object[] {
+                    Arrays.asList(inputs[i]),
+                    IntStream.range(0, outputs[i].length())
+                             .mapToObj(j -> outputs[iFinalized].charAt(j))
+                             .collect(Collectors.toList())
+            });
+        }
+        return result.stream().toArray(Object[][]::new);
+    }
+
+    @Test(dataProvider = "mapCharsToIntsData")
+    public void testMapCharsToInts(final List<Character> input, final char nullChar, final List<Integer> expected) {
+        final Iterator<Integer> it = Utils.map(input.iterator(),
+                ch -> ch == nullChar ? null : (int) ch);
+        Assert.assertNotNull(it);
+        final List<Integer> actual = Utils.stream(it).collect(Collectors.toList());
+        Assert.assertEquals(actual, expected);
+    }
+
+    @DataProvider(name = "mapCharsToIntsData")
+    public static Object[][] mapCharsToIntsData() {
+        final String[][] inputs = new String[][] {
+                new String[] { "JohnAnneRonnie", "n" },
+                new String[] { "01231121201", "X" },
+                new String[] { "X?as12asd?", "?" },
+                new String[] { "", "?" },
+                new String[] { "???", "?" },
+                new String[] { "?0?", "?" },
+        };
+        final Integer[][] outputs = new Integer[inputs.length][];
+        for (int i = 0; i < inputs.length; i++) {
+            final String input = inputs[i][0];
+            final char nullChar = inputs[i][1].charAt(0);
+            final Integer[] output = new Integer[input.length()];
+            for (int j = 0; j < input.length(); j++) {
+                output[j] = input.charAt(j) == nullChar ? null : (int) input.charAt(j);
+            }
+            outputs[i] = output;
+        }
+
+        final List<Object[]> result = new ArrayList<>(inputs.length);
+        for (int i = 0; i < inputs.length; i++) {
+            final int iFinalized = i;
+            result.add(new Object[] {
+                    IntStream.range(0, inputs[i][0].length())
+                            .mapToObj(j -> inputs[iFinalized][0].charAt(j))
+                            .collect(Collectors.toList()),
+                    inputs[i][1].charAt(0),
+                    Arrays.asList(outputs[i])
+            });
+        }
+        return result.stream().toArray(Object[][]::new);
     }
 }

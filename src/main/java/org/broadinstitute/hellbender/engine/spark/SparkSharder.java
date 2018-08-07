@@ -64,14 +64,13 @@ public final class SparkSharder {
      * </p>
      *
      * @param ctx the underlying {@link JavaSparkContext}.
-     * @param sequenceDictionary dictionary.
+     * @param svIntervalLocator Locatable to/from SVInterval translator.
      * @param intervals
      */
-    public <L extends Locatable> SparkSharder(final JavaSparkContext ctx, final SAMSequenceDictionary sequenceDictionary,
+    public <L extends Locatable> SparkSharder(final JavaSparkContext ctx, final SVIntervalLocator svIntervalLocator,
                         final Collection<L> intervals) {
         this.ctx = Utils.nonNull(ctx);
-        Utils.nonNull(sequenceDictionary);
-        this.locator = SVIntervalLocator.of(sequenceDictionary);
+        this.locator = Utils.nonNull(svIntervalLocator);
         this.shards = new SVIntervalTree<>();
         for (final L element : intervals) {
             this.shards.put(locator.toSVInterval(element), SimpleInterval.of(element));
@@ -83,9 +82,22 @@ public final class SparkSharder {
         this.locatorBroadCast = new Lazy<>(() -> this.ctx.broadcast(locator));
     }
 
+    /**
+     * Free held up resources.
+     * @param blocking whether this operation is blocking (until resources have been freed) or not.
+     */
+    public void destroy(final boolean blocking) {
+        if (this.shardsBroadCast.isInitialized()) {
+            this.shardsBroadCast.get().destroy(blocking);
+        }
+        if (this.locatorBroadCast.isInitialized()) {
+            this.locatorBroadCast.get().destroy(blocking);
+        }
+    }
+
    public SparkSharder(final JavaSparkContext ctx, final SAMSequenceDictionary sequenceDictionary,
                        final List<SimpleInterval> intervals, final int shardSize, final int shardPadding) {
-       this(ctx, sequenceDictionary, divideIntoShards(sequenceDictionary, intervals, shardSize, shardPadding));
+       this(ctx, SVIntervalLocator.of(sequenceDictionary), divideIntoShards(sequenceDictionary, intervals, shardSize, shardPadding));
    }
 
     private static List<ShardBoundary> divideIntoShards(final SAMSequenceDictionary sequenceDictionary, final List<SimpleInterval> intervals, final int shardSize, final int shardPadding) {
@@ -123,9 +135,10 @@ public final class SparkSharder {
             return shardsSets.entrySet().stream()
                     .map(entry ->
                             new Tuple2<>(entry.getKey(), entry.getValue()))
-                    .iterator();})
-                .reduceByKey((l1, l2) -> { l1.addAll(l2); return l1; })
-                .map(tuple -> SimpleShard.of(tuple._1(), tuple._2()));
+                    .iterator();
+        }).partitionBy(partitioner(SimpleInterval.class, locatables.getNumPartitions()))
+          .reduceByKey((l1, l2) -> { l1.addAll(l2); return l1; })
+          .map(tuple -> SimpleShard.of(tuple._1(), tuple._2()));
     }
 
     /**

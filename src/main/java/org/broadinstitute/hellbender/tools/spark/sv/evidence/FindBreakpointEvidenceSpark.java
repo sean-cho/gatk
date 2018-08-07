@@ -29,11 +29,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.utils.*;
 import org.broadinstitute.hellbender.tools.spark.utils.FlatMapGluer;
 import org.broadinstitute.hellbender.tools.spark.utils.HopscotchUniqueMultiMap;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.bwa.BwaMemAligner;
-import org.broadinstitute.hellbender.utils.bwa.BwaMemAlignment;
 import org.broadinstitute.hellbender.utils.bwa.BwaMemIndexCache;
-import org.broadinstitute.hellbender.utils.fermi.FermiLiteAssembler;
-import org.broadinstitute.hellbender.utils.fermi.FermiLiteAssembly;
 import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.read.SAMRecordToGATKReadAdapter;
@@ -44,7 +40,6 @@ import java.io.*;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * (Internal) Produces local assemblies of genomic regions that may harbor structural variants
@@ -599,7 +594,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
                 .collect();
 
         SparkUtils.destroyBroadcast(broadcastQNamesMultiMap, "QNames multi map");
-        BwaMemIndexCache.closeAllDistributedInstances(ctx);
+        BwaMemIndexCache.closeAllDistributedGlobalInstances(ctx);
 
         return intervalDispositions;
     }

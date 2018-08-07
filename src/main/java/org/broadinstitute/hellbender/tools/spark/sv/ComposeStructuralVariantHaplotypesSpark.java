@@ -578,13 +578,14 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
             final JavaPairRDD<SVContext, VariantHaplotypesAndContigsComposite> alignedContigs = variantsAndOverlappingUniqueContigs.mapToPair(tuple -> {
                         final SVContext vc = tuple._1();
                         final List<AlignedContig> contigs = tuple._2();
-                        final List<SVHaplotype> haplotypes = vc.composeHaplotypesBasedOnReference(paddingSize, getReference(), contigs);
-                        final SVHaplotype referenceHaplotype = haplotypes.get(0);
-                        final SVHaplotype alternativeHaplotype = haplotypes.get(1);
+                        //final List<SVHaplotype> haplotypes = vc.composeHaplotypesBasedOnReference(paddingSize, getReference(), contigs);
+                        //final SVHaplotype referenceHaplotype = haplotypes.get(0);
+                        //final SVHaplotype alternativeHaplotype = haplotypes.get(1);
                         final List<Integer> variantMappingQualities = calculateVariantMappingQualities(paddingSize, dictionary, vc, contigs);
-                        final List<AlignedContig> referenceAlignedContigs = referenceHaplotype.alignContigs(contigs);
-                        final List<AlignedContig> alternativeAlignedContigs = alternativeHaplotype.alignContigs(contigs);
-                        return new Tuple2<>(vc, new VariantHaplotypesAndContigsComposite(realignmentScoreArgumentCollection, referenceHaplotype, alternativeHaplotype, contigs, referenceAlignedContigs, alternativeAlignedContigs, variantMappingQualities));
+                        //final List<AlignedContig> referenceAlignedContigs = referenceHaplotype.alignContigs(contigs);
+                        //final List<AlignedContig> alternativeAlignedContigs = alternativeHaplotype.alignContigs(contigs);
+                        //return new Tuple2<>(vc, new VariantHaplotypesAndContigsComposite(realignmentScoreArgumentCollection, referenceHaplotype, alternativeHaplotype, contigs, referenceAlignedContigs, alternativeAlignedContigs, variantMappingQualities));
+                return null;
             });
 
 
@@ -598,7 +599,7 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
                     .sortByKey(shardSorter)
                     .mapValues(l -> { l.sort(Comparator.comparingInt(v -> v._1().getStart())); return l; })
                     .values()
-                    .flatMap(List<Tuple2<SVContext, VariantHaplotypesAndContigsComposite>>::iterator)
+                    .flatMap(List::iterator)
                     .toLocalIterator().forEachRemaining(tuple -> {
                         final SVContext variant = tuple._1();
                         final VariantHaplotypesAndContigsComposite haplotypesAndContigs = tuple._2();
@@ -919,36 +920,37 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
         }
 
         private List<SAMRecord> composeAlignedOutputHaplotypeSAMRecords(SAMFileHeader header, SVContext variant, SVHaplotype haplotype) {
-            final List<AlignmentInterval> intervals = haplotype.getReferenceAlignmentIntervals()
-                    .stream().sorted(ALIGNMENT_INTERVAL_PRIMARY_SECONDARY_SORTER).collect(Collectors.toList());
-            final List<SAMRecord> result = new ArrayList<>(intervals.size());
-            final String vcUID = variant.getUniqueID();
-            for (int i = 0; i < intervals.size(); i++) {
-                final AlignmentInterval interval = intervals.get(i);
-                final SAMRecord record = intervals.get(i).toSAMRecord(header, haplotype.getName(), haplotype.getBases(), i != 0, SAMFlag.SUPPLEMENTARY_ALIGNMENT.intValue(), null);
-                record.setReadNegativeStrandFlag(!interval.forwardStrand);
-                record.setReadName(haplotype.getName());
-                record.setAttribute(SAMTag.RG.name(), HAPLOTYPE_READ_GROUP);
-                record.setAttribute(HAPLOTYPE_CALL_TAG, haplotype.getName());
-                record.setAttribute(HAPLOTYPE_QUAL_TAG, "" + 60);
-                record.setAttribute(VARIANT_CONTEXT_TAG, vcUID);
-                record.setSupplementaryAlignmentFlag(i != 0);
-                result.add(record);
-            }
-            final List<String> saTagValues = intervals.stream()
-                    .map(AlignmentInterval::toSumpplementaryAlignmentString)
-                    .collect(Collectors.toList());
-            if (result.size() > 1) {
-                for (int i = 0; i < result.size(); i++) {
-                    final int idx = i;
-                    result.get(i).setAttribute(SAMTag.SA.name(),
-                            IntStream.range(0, result.size())
-                                    .filter(ii -> ii != idx)
-                                    .mapToObj(saTagValues::get)
-                                    .collect(Collectors.joining(";")) + ";");
-                }
-            }
-            return result;
+//            final List<AlignmentInterval> intervals = haplotype.getReferenceAlignmentIntervals()
+//                    .stream().sorted(ALIGNMENT_INTERVAL_PRIMARY_SECONDARY_SORTER).collect(Collectors.toList());
+//            final List<SAMRecord> result = new ArrayList<>(intervals.size());
+//            final String vcUID = variant.getUniqueID();
+//            for (int i = 0; i < intervals.size(); i++) {
+//                final AlignmentInterval interval = intervals.get(i);
+//                final SAMRecord record = intervals.get(i).toSAMRecord(header, haplotype.getName(), haplotype.getBases(), i != 0, SAMFlag.SUPPLEMENTARY_ALIGNMENT.intValue(), null);
+//                record.setReadNegativeStrandFlag(!interval.forwardStrand);
+//                record.setReadName(haplotype.getName());
+//                record.setAttribute(SAMTag.RG.name(), HAPLOTYPE_READ_GROUP);
+//                record.setAttribute(HAPLOTYPE_CALL_TAG, haplotype.getName());
+//                record.setAttribute(HAPLOTYPE_QUAL_TAG, "" + 60);
+//                record.setAttribute(VARIANT_CONTEXT_TAG, vcUID);
+//                record.setSupplementaryAlignmentFlag(i != 0);
+//                result.add(record);
+//            }
+//            final List<String> saTagValues = intervals.stream()
+//                    .map(AlignmentInterval::toSumpplementaryAlignmentString)
+//                    .collect(Collectors.toList());
+//            if (result.size() > 1) {
+//                for (int i = 0; i < result.size(); i++) {
+//                    final int idx = i;
+//                    result.get(i).setAttribute(SAMTag.SA.name(),
+//                            IntStream.range(0, result.size())
+//                                    .filter(ii -> ii != idx)
+//                                    .mapToObj(saTagValues::get)
+//                                    .collect(Collectors.joining(";")) + ";");
+//                }
+//            }
+//            return result;
+            return null;
         }
 
 
@@ -1029,7 +1031,7 @@ public class ComposeStructuralVariantHaplotypesSpark extends GATKSparkTool {
             result.setAttribute(HAPLOTYPE_QUAL_TAG, "" + 60);
             result.setAttribute(REFERENCE_SCORE_TAG, "" + 0);
             result.setAttribute(ALTERNATIVE_SCORE_TAG, "" + 60);
-            result.setAttribute(SAMTag.SA.name(), composeSupplementaryLikeString(haplotype.getReferenceAlignmentIntervals()) + ';');
+            //result.setAttribute(SAMTag.SA.name(), composeSupplementaryLikeString(haplotype.getReferenceAlignmentIntervals()) + ';');
             result.setAttribute(VARIANT_CONTEXT_TAG, variant.getUniqueID());
             result.setReadPairedFlag(false);
             result.setDuplicateReadFlag(false);

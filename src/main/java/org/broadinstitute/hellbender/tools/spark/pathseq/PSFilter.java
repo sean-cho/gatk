@@ -288,7 +288,7 @@ public final class PSFilter implements AutoCloseable {
      * After doFilter(), this should be run after a Spark action (e.g. write bam) has been invoked on both output RDDs
      */
     public void close() {
-        BwaMemIndexCache.closeAllDistributedInstances(ctx);
+        BwaMemIndexCache.closeAllDistributedGlobalInstances(ctx);
         ContainsKmerReadFilterSpark.closeAllDistributedInstances(ctx);
     }
 

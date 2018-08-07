@@ -29,6 +29,6 @@ public final class PSBwaAlignerSpark implements AutoCloseable {
 
     //Run this after invoking a Spark action on all RDDs returned from doBwaAlignment()
     public void close() {
-        BwaMemIndexCache.closeAllDistributedInstances(ctx);
+        BwaMemIndexCache.closeAllDistributedGlobalInstances(ctx);
     }
 }

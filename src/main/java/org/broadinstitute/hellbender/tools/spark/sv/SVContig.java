@@ -4,17 +4,22 @@ import com.esotericsoftware.kryo.DefaultSerializer;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import htsjdk.samtools.CigarOperator;
 import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMTag;
 import htsjdk.samtools.util.Locatable;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignedContig;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignmentInterval;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.ArraySVHaplotype;
+import org.broadinstitute.hellbender.tools.spark.sv.utils.SVContext;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.read.ReadUtils;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,18 +52,45 @@ public class SVContig extends ArraySVHaplotype {
         }
     }
 
+    public String getAlternativeScoreString() {
+        return alternativeAlignmentScore == null ? "." : alternativeAlignmentScore.toString();
+    }
+
+    public String getReferenceScoreString() {
+        return referenceAlignmentScore == null ? "." : referenceAlignmentScore.toString();
+    }
+
     enum Call {
         REF, ALT, NOCALL;
     }
 
-    private final List<AlignmentInterval> referenceAlignment;
-    private final List<AlignmentInterval> alternativeAlignment;
-    private final RealignmentScore referenceAlignmentScore;
-    private final RealignmentScore alternativeAlignmentScore;
-    private final double callQuality;
-    private final Call call;
-    private List<GATKRead> reads;
+    private List<AlignmentInterval> referenceAlignment;
+    private List<AlignmentInterval> alternativeAlignment;
+    private RealignmentScore referenceAlignmentScore;
+    private RealignmentScore alternativeAlignmentScore;
+    private double callQuality;
+    private Call call;
 
+    public static SVContig of(final AlignedContig contig, final SVContext variant, final int padding) {
+        final AlignmentInterval primary = contig.getAlignments().stream()
+                .filter(ai -> !ai.cigarAlong5to3DirectionOfContig.containsOperator(CigarOperator.H))
+                .sorted(Comparator.comparingInt(ai -> -ai.alnScore))
+                .findFirst().orElse(null);
+        if (primary == null) {
+            throw new IllegalArgumentException("no primary alignment!");
+        }
+        final List<SimpleInterval> breakPoints = variant.getBreakPointIntervals(padding, true);
+        final int mappingQuality = contig.getAlignments().stream()
+                .filter(ai -> breakPoints.stream().anyMatch(bp -> bp.overlaps(ai.referenceSpan)))
+                .mapToInt(ai -> ai.mapQual)
+                .filter(mq -> mq != SAMRecord.UNKNOWN_MAPPING_QUALITY)
+                .max().orElse(0);
+
+        final String variantId = variant.getUniqueID();
+        final SimpleInterval location = primary.referenceSpan.getStartInterval();
+
+        return new SVContig(contig.getContigName(), location, variantId, contig.getContigSequence(), contig.getAlignments(), null, null, null, null, mappingQuality, null);
+    }
 
     public static SVContig of(final GATKRead read, final RealignmentScoreParameters scoreParameters) {
         final Double qual = read.getAttributeAsDouble(ComposeStructuralVariantHaplotypesSpark.HAPLOTYPE_QUAL_TAG);
@@ -69,15 +101,26 @@ public class SVContig extends ArraySVHaplotype {
         final RealignmentScore altScore = getOptionalAlignmentScore(read, ComposeStructuralVariantHaplotypesSpark.ALTERNATIVE_SCORE_TAG, scoreParameters);
         final SimpleInterval location = new SimpleInterval(read.getAssignedContig(), read.getAssignedStart(), read.getAssignedStart());
         final int mappingQuality = read.getMappingQuality();
-        return new SVContig(read.getName(), location, variantId, read.getBases(), refAln, refScore, altAln, altScore, mappingQuality, qual);
+        return new SVContig(read.getName(), location, variantId, read.getBases(), AlignmentInterval.decodeList(read.getAttributeAsString(SAMTag.SA.name())), refAln, refScore, altAln, altScore, mappingQuality, qual);
     }
 
-    public List<AlignmentInterval> getReferenceAlignment() {
-        return referenceAlignment;
+    public void setReferenceAlignment(final List<AlignmentInterval> intervals, final RealignmentScore score) {
+        referenceAlignment = intervals;
+        referenceAlignmentScore = score;
     }
 
-    public List<AlignmentInterval> getAlternativeAlignment() {
-        return alternativeAlignment;
+    public void setAlternativeAlignment(final List<AlignmentInterval> intervals, final RealignmentScore score) {
+        alternativeAlignment = intervals;
+        alternativeAlignmentScore = score;
+    }
+
+    public List<AlignmentInterval> geReferenceHaplotypeAlignment() {
+        return referenceAlignment == null ? Collections.emptyList() : referenceAlignment;
+    }
+
+    public List<AlignmentInterval> getAlternativeHaplotypeAlignment() {
+
+        return alternativeAlignment == null ? Collections.emptyList() : alternativeAlignment;
     }
 
     private static RealignmentScore getOptionalAlignmentScore(final GATKRead read, final String tag, final RealignmentScoreParameters parameters) {
@@ -95,10 +138,11 @@ public class SVContig extends ArraySVHaplotype {
         return str.isPresent() ? AlignmentInterval.decodeList(str.get()) : null;
     }
 
+
     public SVContig(final String name, final Locatable loc, final String variantId,
-                    final byte[] bases, final List<AlignmentInterval> refAln, final RealignmentScore refScore,
+                    final byte[] bases, final List<AlignmentInterval> originalReferenceAlignment, final List<AlignmentInterval> refAln, final RealignmentScore refScore,
                     final List<AlignmentInterval> altAln, final RealignmentScore altScore, final int mappingQuality, final Double qual) {
-        super(name, refAln, bases, variantId, SimpleInterval.of(loc), mappingQuality, true);
+        super(name, originalReferenceAlignment, bases, variantId, SimpleInterval.of(loc), mappingQuality, true);
         if (isReference() || isAlternative()) {
             throw new IllegalArgumentException("invalid assembled contig name, must not be reference or alternative like: " + name);
         }
@@ -161,7 +205,7 @@ public class SVContig extends ArraySVHaplotype {
         private static List<AlignmentInterval> readAlignment(final Kryo kryo, final Input input) {
             final int length = input.readInt();
             if (length <= 0) {
-                return Collections.emptyList();
+                return null;
             } else {
                 final AlignmentInterval[] intervals = new AlignmentInterval[length];
                 for (int i = 0; i < length; i++) {
@@ -173,21 +217,21 @@ public class SVContig extends ArraySVHaplotype {
     }
 
     public boolean isPerfectReferenceMap() {
-        return referenceAlignment.size() == 1 && referenceAlignment.get(0).cigarAlong5to3DirectionOfContig.numCigarElements() == 1
+        return referenceAlignment != null && referenceAlignment.size() == 1 && referenceAlignment.get(0).cigarAlong5to3DirectionOfContig.numCigarElements() == 1
                 && referenceAlignment.get(0).cigarAlong5to3DirectionOfContig.getCigarElement(0).getOperator().isAlignment()
                 && referenceAlignment.get(0).cigarAlong5to3DirectionOfContig.getCigarElement(0).getLength() == getLength()
                 && referenceAlignment.get(0).mismatches == 0;
     }
 
     public boolean isPerfectAlternativeMap() {
-        return alternativeAlignment.size() == 1 && alternativeAlignment.get(0).cigarAlong5to3DirectionOfContig.numCigarElements() == 1
+        return alternativeAlignment != null && alternativeAlignment.size() == 1 && alternativeAlignment.get(0).cigarAlong5to3DirectionOfContig.numCigarElements() == 1
                 && alternativeAlignment.get(0).cigarAlong5to3DirectionOfContig.getCigarElement(0).getOperator().isAlignment()
                 && alternativeAlignment.get(0).cigarAlong5to3DirectionOfContig.getCigarElement(0).getLength() == getLength()
                 && alternativeAlignment.get(0).mismatches == 0;
     }
 
     public int getMinimumMappingQuality() {
-        return (int) Math.min(callQuality, getReferenceAlignment().stream().mapToInt(ai -> ai.mapQual).filter(mq -> mq != SAMRecord.UNKNOWN_MAPPING_QUALITY).max().orElse(0));
+        return (int) Math.min(callQuality, geReferenceHaplotypeAlignment().stream().mapToInt(ai -> ai.mapQual).filter(mq -> mq != SAMRecord.UNKNOWN_MAPPING_QUALITY).max().orElse(0));
     }
 
 }

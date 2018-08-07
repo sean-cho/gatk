@@ -124,17 +124,17 @@ public final class ShardPartitioner<T extends Locatable> extends Partitioner {
     /**
      * Create a new shard-partitioner given a sorted collection of shards.
      * @param shards the input shards.
-     * @param numberOfPartitions number of partitions for this partitioner.
+     * @param maximumNumberOfPartitions number of partitions for this partitioner.
      * @param <L> the shard type.
      */
-    public <L extends Locatable> ShardPartitioner(final Class<T> clazz, final Iterable<L> shards, final int numberOfPartitions) {
+    public <L extends Locatable> ShardPartitioner(final Class<T> clazz, final Iterable<L> shards, final int maximumNumberOfPartitions) {
         Utils.nonNull(clazz);
         Utils.nonNull(shards);
         this.clazz = clazz;
         final int numberOfShards = Utils.size(shards);
         ParamUtils.isPositive(numberOfShards, "input shard iterable must not be empty");
-        ParamUtils.isPositive(numberOfPartitions, "the number of input partitions must be 1 or greater");
-        final int numberOfShardsPerPartition = numberOfShards <= numberOfPartitions ? 1 : Math.round(numberOfShards / (float) numberOfPartitions);
+        ParamUtils.isPositive(maximumNumberOfPartitions, "the maximum number of input partitions must be 1 or greater");
+        final int numberOfShardsPerPartition = numberOfShards <= maximumNumberOfPartitions ? 1 : Math.round(numberOfShards / (float) maximumNumberOfPartitions);
         final Iterator<L> shardIterator = shards.iterator();
         partitions = new SVIntervalTree<>();
         L previousLocatable = shardIterator.next();
@@ -169,13 +169,13 @@ public final class ShardPartitioner<T extends Locatable> extends Partitioner {
                 leftInPartition = numberOfShardsPerPartition - 1;
                 currentPartition++;
             }
-            if (currentPartition >= numberOfPartitions) { // make sure we don't overflow the partition number in case the last partition is the bigger one.
+            if (currentPartition >= maximumNumberOfPartitions) { // make sure we don't overflow the partition number in case the last partition is the bigger one.
                 currentPartition--;
             }
             previousLocatable = locatable;
         }
         partitions.put(new SVInterval(currentContigIndex, currentPartitionStart, Integer.MAX_VALUE), currentPartition);
-        this.numberOfPartitions = numberOfPartitions;
+        this.numberOfPartitions = Math.min(maximumNumberOfPartitions, numberOfShards);
     }
 
     @SuppressWarnings("unchecked")

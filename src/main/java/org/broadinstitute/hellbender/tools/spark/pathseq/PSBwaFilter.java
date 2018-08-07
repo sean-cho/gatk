@@ -26,7 +26,7 @@ public class PSBwaFilter {
 
     public PSBwaFilter(final String indexFileName, final int minIdent,
                        final int minSeedLength, final int numThreads, final boolean bPaired) {
-        this.bwaIndex = BwaMemIndexCache.getInstance(indexFileName);
+        this.bwaIndex = BwaMemIndexCache.getGlobalInstance(indexFileName);
         this.minIdent = minIdent;
         this.minSeedLength = minSeedLength;
         this.numThreads = numThreads;

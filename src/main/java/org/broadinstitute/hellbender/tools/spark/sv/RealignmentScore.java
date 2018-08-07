@@ -14,6 +14,7 @@ import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.read.CigarUtils;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -203,7 +204,8 @@ public final class RealignmentScore {
     }
 
     public static RealignmentScore calculate(final RealignmentScoreParameters parameters, final byte[] ref, final byte[] seq, final List<AlignmentInterval> intervals) {
-        final List<AlignmentInterval> sortedIntervals = intervals.stream()
+        final List<AlignmentInterval> sortedIntervals = intervals == null ? Collections.emptyList()
+                : intervals.stream()
                 .sorted(Comparator.comparing(ai -> ai.startInAssembledContig))
                 .collect(Collectors.toList());
 

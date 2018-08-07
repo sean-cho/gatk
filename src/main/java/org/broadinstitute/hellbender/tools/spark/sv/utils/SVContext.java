@@ -154,7 +154,7 @@ public final class SVContext extends VariantContext {
      */
     public List<SVHaplotype> composeHaplotypesBasedOnReference(final int paddingSize,
                                                         final ReferenceMultiSource reference,
-                                                        final List<AlignedContig> contigs)  {
+                                                        final List<SimpleInterval> mandatoryCoverage)  {
         Utils.nonNull(reference, "the input reference cannot be null");
         ParamUtils.isPositiveOrZero(paddingSize, "the input padding must be 0 or greater");
 
@@ -171,7 +171,7 @@ public final class SVContext extends VariantContext {
                     + "contig %s length is %d but variant end is %d", getContig(), contigLength, getEnd()));
         }
 
-        final List<ReferenceBases> referenceBases = calculateReferenceIntervals(paddingSize, dictionary, contigs).stream()
+        final List<ReferenceBases> referenceBases = calculateReferenceIntervals(paddingSize, dictionary, mandatoryCoverage).stream()
                 .map(pi -> { try { return reference.getReferenceBases(pi); } catch (final IOException ex) { throw new UncheckedIOException(ex); }})
                 .collect(Collectors.toList());
         final List<SVHaplotype> result = new ArrayList<>(2);
@@ -397,17 +397,16 @@ public final class SVContext extends VariantContext {
      *
      * @param padding
      * @param dictionary
-     * @param contigs
+     * @param mandatoryCoverage intervals that must be covered by the haplotypes if contiguous to them
      * @return
      */
     private List<SimpleInterval> calculateReferenceIntervals(final int padding, final SAMSequenceDictionary dictionary,
-                                                             final List<AlignedContig> contigs) {
+                                                             final List<SimpleInterval> mandatoryCoverage) {
         final List<SimpleInterval> breakPoints = getBreakPointIntervals(padding, dictionary, true);
         SVIntervalLocator locator = SVIntervalLocator.of(dictionary);
         final SVIntervalTree<SVInterval> tree = new SVIntervalTree<>();
         Stream.concat(breakPoints.stream().map(bp -> locator.toSVInterval(bp, 1)),
-                contigs.stream().flatMap(ctg -> ctg.getAlignments().stream())
-                        .map(ai -> locator.toSVInterval(ai.referenceSpan, padding + 1)))
+                mandatoryCoverage.stream().map(ai -> locator.toSVInterval(ai, padding + 1)))
                 .forEach(svIntervalPlus -> {
                     final Iterator<SVIntervalTree.Entry<SVInterval>> overlappers = tree.overlappers(svIntervalPlus);
                     int minStart = svIntervalPlus.getStart() + 1; // + 1 and -1 to remove the aboutter padding.
@@ -552,24 +551,36 @@ public final class SVContext extends VariantContext {
     }
 
     /**
+     * Creates padded breakpoint locations ignoring the actual size of the contigs as
+     * a dictionary is not provided.
+     *
+     * @param padding the padding around the break-point.
+     * @param padForHomology wether to add extra padding due to homology mapping ambiguity.
+     * @return never {@code null}.
+     */
+    public List<SimpleInterval> getBreakPointIntervals(final int padding, final boolean padForHomology) {
+        return getBreakPointIntervals(padding, null, padForHomology);
+    }
+
+    /**
      * Returns break point intervals for this structural variant.
      * <p>
-     *     Typically the break point interval would be located between two point locations in the reference genome.
-     *     In that case this method will return {@code padding} bases up- and down-stream from that
-     *     inter-base position.
+     * Typically the break point interval would be located between two point locations in the reference genome.
+     * In that case this method will return {@code padding} bases up- and down-stream from that
+     * inter-base position.
      * </p>
      * <p>
-     *     In case the padding is set to zero, since the 0-length interval is not valid, this method would
-     *     return an interval including the base just before the break-point.
+     * In case the padding is set to zero, since the 0-length interval is not valid, this method would
+     * return an interval including the base just before the break-point.
      * </p>
      * <p>
-     *      If padForHomology is set, the breakpoint interval will include the region specified as homologous
-     *      sequence in the HOMOLOGY_LENGTH attribute of VariantContext, in addition to the
-     *      normal padding specified in the first parameter.
+     * If padForHomology is set, the breakpoint interval will include the region specified as homologous
+     * sequence in the HOMOLOGY_LENGTH attribute of VariantContext, in addition to the
+     * normal padding specified in the first parameter.
      * </p>
      *
-     * @param padding the padding around the exact location of the break point to be included in the padded interval.
-     * @param dictionary reference meta-data.
+     * @param padding        the padding around the exact location of the break point to be included in the padded interval.
+     * @param dictionary     reference meta-data. If {@code null} the end provided may go beyond the actual end of the contig.
      * @param padForHomology Add homologous sequence around the breakpoint to the interval
      * @return never {@code null}, potentially 0-length but typically at least one element.
      */
@@ -577,9 +588,9 @@ public final class SVContext extends VariantContext {
                                                        final SAMSequenceDictionary dictionary,
                                                        final boolean padForHomology) {
         ParamUtils.isPositiveOrZero(padding, "the input padding must be 0 or greater");
-        Utils.nonNull(dictionary, "the input dictionary cannot be null");
+        //Utils.nonNull(dictionary, "the input dictionary cannot be null");
         final String contigName = getContig();
-        final int contigLength = dictionary.getSequence(contigName).getSequenceLength();
+        final int contigLength = dictionary == null ? -1 : dictionary.getSequence(contigName).getSequenceLength();
         final StructuralVariantType type = getStructuralVariantType();
         if (type == StructuralVariantType.INS || type == StructuralVariantType.DUP) {
             final int start = getStart();
@@ -604,7 +615,7 @@ public final class SVContext extends VariantContext {
                                                         final int end, final int padding) {
         return new SimpleInterval(contig,
                 Math.max(1, padding > 0 ? start - padding : start),
-                Math.min(contigSize, end + padding));
+                contigSize > 0 ? Math.min(contigSize, end + padding) : end + padding);
 
     }
 

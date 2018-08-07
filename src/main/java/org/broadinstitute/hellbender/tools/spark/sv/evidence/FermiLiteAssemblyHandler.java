@@ -99,7 +99,7 @@ public final class FermiLiteAssemblyHandler implements FindBreakpointEvidenceSpa
         }
 
         // align the assembled contigs to the genomic reference
-        try ( final BwaMemAligner aligner = new BwaMemAligner(BwaMemIndexCache.getInstance(alignerIndexFile)) ) {
+        try ( final BwaMemAligner aligner = new BwaMemAligner(BwaMemIndexCache.getGlobalInstance(alignerIndexFile)) ) {
             aligner.setIntraCtgOptions();
             aligner.setZDropOption(zDropoff);
             final List<byte[]> sequences =

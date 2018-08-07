@@ -178,7 +178,7 @@ public class PSFilterTest extends CommandLineProgramTest {
         final JavaRDD<GATKRead> reads = ctx.parallelize(readList);
 
         final List<GATKRead> result = PSFilter.doBwaFilter(reads, BWA_IMAGE_PATH, 19, 1, 65).collect();
-        BwaMemIndexCache.closeAllDistributedInstances(ctx);
+        BwaMemIndexCache.closeAllDistributedGlobalInstances(ctx);
         Assert.assertEquals(result.size(), expectedNum);
     }
 

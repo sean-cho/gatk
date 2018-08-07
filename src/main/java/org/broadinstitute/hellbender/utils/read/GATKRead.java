@@ -9,9 +9,11 @@ import htsjdk.samtools.util.Locatable;
 import htsjdk.samtools.util.StringUtil;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Objects;
 
 /**
  * Unified read interface for use throughout the GATK.
@@ -942,6 +944,10 @@ public interface GATKRead extends Locatable {
                 throw new GATKException.ReadAttributeTypeMismatch(name, "Double");
             }
         }
+    }
+
+    default boolean isPrimaryAlignment() {
+        return !isSupplementaryAlignment() && !isSecondaryAlignment();
     }
 }
 

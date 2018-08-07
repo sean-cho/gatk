@@ -3,18 +3,12 @@ package org.broadinstitute.hellbender.tools.spark.sv.utils;
 import htsjdk.samtools.Cigar;
 import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
-import htsjdk.samtools.SAMSequenceDictionary;
-import htsjdk.samtools.SAMSequenceRecord;
-import org.apache.commons.collections4.IterableUtils;
-import org.broadinstitute.hellbender.engine.datasources.ReferenceSource;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignedContig;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AlignmentInterval;
 import org.broadinstitute.hellbender.tools.spark.sv.discovery.alignment.AssemblyContigAlignmentsConfigPicker;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.reference.ReferenceBases;
 
-import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -91,7 +85,7 @@ public interface SVHaplotype {
     /**
      * Returns list of alignment intervals of this haplotype vs the reference.
      */
-    List<AlignmentInterval> getReferenceAlignmentIntervals();
+    List<AlignmentInterval> getReferenceAlignment();
 
     String getName();
 
@@ -170,7 +164,7 @@ public interface SVHaplotype {
      * @return {@code null} if the haplotype does not map to a single contig.
      */
     default SimpleInterval getReferenceSpan() {
-        final List<AlignmentInterval> intervals = getReferenceAlignmentIntervals();
+        final List<AlignmentInterval> intervals = getReferenceAlignment();
         if (intervals.isEmpty()) {
             return null;
         } else if (intervals.size() == 1) {
@@ -198,7 +192,7 @@ public interface SVHaplotype {
     }
 
     default Cigar getCigar() {
-        final List<AlignmentInterval> intervals = getReferenceAlignmentIntervals();
+        final List<AlignmentInterval> intervals = getReferenceAlignment();
         if (intervals.isEmpty()) {
             return new Cigar();
         } else if (intervals.size() == 1) {

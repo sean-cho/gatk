@@ -107,7 +107,7 @@ public final class BwaSparkEngine implements AutoCloseable {
     @Override
     public void close() {
         broadcastHeader.destroy();
-        BwaMemIndexCache.closeAllDistributedInstances(ctx);
+        BwaMemIndexCache.closeAllDistributedGlobalInstances(ctx);
     }
 
     private static final class ReadAligner {
@@ -119,7 +119,7 @@ public final class BwaSparkEngine implements AutoCloseable {
         private static final int READS_PER_PARTITION_GUESS = 1500000;
 
         ReadAligner( final String indexFileName, final SAMFileHeader readsHeader, final boolean alignsPairs) {
-            this.bwaMemIndex = BwaMemIndexCache.getInstance(indexFileName);
+            this.bwaMemIndex = BwaMemIndexCache.getGlobalInstance(indexFileName);
             this.readsHeader = readsHeader;
             this.alignsPairs = alignsPairs;
             if ( alignsPairs && readsHeader.getSortOrder() != SAMFileHeader.SortOrder.queryname ) {

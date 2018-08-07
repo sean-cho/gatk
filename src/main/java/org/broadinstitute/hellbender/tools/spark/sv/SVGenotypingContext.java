@@ -119,10 +119,6 @@ final class SVGenotypingContext {
         protected Allele(final SVHaplotype haplotype, final String basesString, final boolean isRef) {
             super(basesString, isRef);
         }
-
-        private boolean isReference(final SVHaplotype haplotype) {
-            return haplotype.getName().equals("refHaplotype");
-        }
     }
 
     SVGenotypingContext(final SVContext variant,
@@ -196,7 +192,7 @@ final class SVGenotypingContext {
     }
 
     private static int[] calculateBreakPoints(final SVHaplotype haplotype, final SVContext context, final SAMSequenceDictionary dictionary) {
-        final List<AlignmentInterval> intervals = haplotype.getReferenceAlignmentIntervals();
+        final List<AlignmentInterval> intervals = haplotype.getReferenceAlignment();
         final List<SimpleInterval> breakPoints = context.getBreakPointIntervals(0, dictionary, false);
         final List<Integer> result = new ArrayList<>(breakPoints.size());
         for (final SimpleInterval breakPoint : breakPoints) {
