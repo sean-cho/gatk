@@ -132,9 +132,12 @@ public abstract class AbstractRecordCollection<METADATA extends Metadata, RECORD
         }
 
         final AbstractRecordCollection<?, ?> that = (AbstractRecordCollection<?, ?>) o;
+
         return metadata.equals(that.metadata) &&
                 records.equals(that.records) &&
-                mandatoryColumns.equals(that.mandatoryColumns);
+                mandatoryColumns.equals(that.mandatoryColumns) &&
+                recordFromDataLineDecoder.equals(that.recordFromDataLineDecoder) &&
+                recordToDataLineEncoder.equals(that.recordToDataLineEncoder);
     }
 
     @Override
@@ -142,6 +145,8 @@ public abstract class AbstractRecordCollection<METADATA extends Metadata, RECORD
         int result = metadata.hashCode();
         result = 31 * result + records.hashCode();
         result = 31 * result + mandatoryColumns.hashCode();
+        result = 31 * result + recordFromDataLineDecoder.hashCode();
+        result = 31 * result + recordToDataLineEncoder.hashCode();
         return result;
     }
 

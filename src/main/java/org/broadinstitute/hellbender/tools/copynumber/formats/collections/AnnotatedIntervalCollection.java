@@ -6,7 +6,8 @@ import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.copynumber.AnnotateIntervals;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.LocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotatedInterval;
-import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotationMap;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.AnnotationKey;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.AnnotationMap;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.tsv.DataLine;
 import org.broadinstitute.hellbender.utils.tsv.TableColumnCollection;
@@ -45,7 +46,7 @@ public final class AnnotatedIntervalCollection extends AbstractLocatableCollecti
                 .append(annotatedInterval.getInterval().getStart())
                 .append(annotatedInterval.getInterval().getEnd());
         final AnnotationMap annotations = annotatedInterval.getAnnotationMap();
-        for (final AnnotationMap.AnnotationKey<?> key : annotations.getKeys()) {
+        for (final AnnotationKey<?> key : annotations.getKeys()) {
             final AnnotationValueType type = AnnotationValueType.valueOf(key.getType().getSimpleName());
             switch (type) {
                 case Integer:
@@ -75,7 +76,7 @@ public final class AnnotatedIntervalCollection extends AbstractLocatableCollecti
     }
 
     public AnnotatedIntervalCollection(final File inputFile,
-                                       final List<AnnotationMap.AnnotationKey<?>> annotationKeys) {
+                                       final List<AnnotationKey<?>> annotationKeys) {
         super(
                 inputFile,
                 getColumns(annotationKeys),
@@ -93,26 +94,26 @@ public final class AnnotatedIntervalCollection extends AbstractLocatableCollecti
                 ANNOTATED_INTERVAL_RECORD_TO_DATA_LINE_ENCODER);
     }
 
-    private static TableColumnCollection getColumns(final List<AnnotationMap.AnnotationKey<?>> annotationKeys) {
+    private static TableColumnCollection getColumns(final List<AnnotationKey<?>> annotationKeys) {
         return new TableColumnCollection(
                 ListUtils.union(
                         AnnotatedIntervalTableColumn.STANDARD_COLUMNS.names(),
-                        annotationKeys.stream().map(AnnotationMap.AnnotationKey::getName).collect(Collectors.toList())));
+                        annotationKeys.stream().map(AnnotationKey::getName).collect(Collectors.toList())));
     }
 
-    private static List<AnnotationMap.AnnotationKey<?>> getAnnotationKeys(final List<AnnotatedInterval> annotatedIntervals) {
+    private static List<AnnotationKey<?>> getAnnotationKeys(final List<AnnotatedInterval> annotatedIntervals) {
         return annotatedIntervals.isEmpty() ? new ArrayList<>() : annotatedIntervals.get(0).getAnnotationMap().getKeys();
     }
 
     private static Function<DataLine, AnnotatedInterval> getAnnotatedIntervalRecordFromDataLineDecoder(
-            final List<AnnotationMap.AnnotationKey<?>> annotationKeys) {
+            final List<AnnotationKey<?>> annotationKeys) {
         return dataLine -> {
             final String contig = dataLine.get(AnnotatedIntervalTableColumn.CONTIG);
             final int start = dataLine.getInt(AnnotatedIntervalTableColumn.START);
             final int end = dataLine.getInt(AnnotatedIntervalTableColumn.END);
             final SimpleInterval interval = new SimpleInterval(contig, start, end);
-            final List<Pair<AnnotationMap.AnnotationKey<?>, Object>> annotations = new ArrayList<>(annotationKeys.size());
-            for (final AnnotationMap.AnnotationKey<?> key : annotationKeys) {
+            final List<Pair<AnnotationKey<?>, Object>> annotations = new ArrayList<>(annotationKeys.size());
+            for (final AnnotationKey<?> key : annotationKeys) {
                 final AnnotationValueType type = AnnotationValueType.valueOf(key.getType().getSimpleName());
                 switch (type) {
                     case Integer:

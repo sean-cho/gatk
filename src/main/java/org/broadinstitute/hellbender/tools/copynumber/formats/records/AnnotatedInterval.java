@@ -1,6 +1,7 @@
 package org.broadinstitute.hellbender.tools.copynumber.formats.records;
 
 import htsjdk.samtools.util.Locatable;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.AnnotationMap;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 

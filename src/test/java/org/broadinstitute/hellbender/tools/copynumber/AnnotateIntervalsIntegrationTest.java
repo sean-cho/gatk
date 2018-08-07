@@ -10,7 +10,7 @@ import org.broadinstitute.hellbender.tools.copynumber.formats.collections.Annota
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.LocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.SimpleLocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotatedInterval;
-import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotationMap;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.AnnotationMap;
 import org.broadinstitute.hellbender.utils.IntervalMergingRule;
 import org.broadinstitute.hellbender.utils.IntervalSetRule;
 import org.broadinstitute.hellbender.utils.SimpleInterval;

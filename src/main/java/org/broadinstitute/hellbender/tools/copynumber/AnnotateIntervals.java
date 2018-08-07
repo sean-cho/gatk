@@ -14,7 +14,8 @@ import org.broadinstitute.hellbender.tools.copynumber.arguments.CopyNumberArgume
 import org.broadinstitute.hellbender.tools.copynumber.formats.collections.AnnotatedIntervalCollection;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.SimpleLocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotatedInterval;
-import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotationMap;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.AnnotationKey;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.AnnotationMap;
 import org.broadinstitute.hellbender.utils.IntervalMergingRule;
 import org.broadinstitute.hellbender.utils.Nucleotide;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
@@ -144,10 +145,10 @@ public final class AnnotateIntervals extends GATKTool {
      * calling {@link IntervalAnnotator#apply}.
      */
     interface IntervalAnnotator<T> {
-        AnnotationMap.AnnotationKey<T> getAnnotationKey();
+        AnnotationKey<T> getAnnotationKey();
 
         /**
-         * The returned value should be validated using {@link AnnotationMap.AnnotationKey#validate}.
+         * The returned value should be validated using {@link AnnotationKey#validate}.
          */
         T apply(final Locatable interval,
                 final ReadsContext readsContext,
@@ -156,13 +157,13 @@ public final class AnnotateIntervals extends GATKTool {
     }
 
     public static class GCContentAnnotator implements IntervalAnnotator<Double> {
-        public static final AnnotationMap.AnnotationKey<Double> ANNOTATION_KEY = new AnnotationMap.AnnotationKey<>(
+        public static final AnnotationKey<Double> ANNOTATION_KEY = new AnnotationKey<>(
                 "GC_CONTENT",
                 Double.class,
                 gcContent -> (0. <= gcContent && gcContent <= 1.) || Double.isNaN(gcContent));
 
         @Override
-        public AnnotationMap.AnnotationKey<Double> getAnnotationKey() {
+        public AnnotationKey<Double> getAnnotationKey() {
             return ANNOTATION_KEY;
         }
 
@@ -183,8 +184,8 @@ public final class AnnotateIntervals extends GATKTool {
 
     public static class MappabilityAnnotator implements IntervalAnnotator<Double> {
         @Override
-        public AnnotationMap.AnnotationKey<Double> getAnnotationKey() {
-            return new AnnotationMap.AnnotationKey<>(
+        public AnnotationKey<Double> getAnnotationKey() {
+            return new AnnotationKey<>(
                     "MAPPABILITY",
                     Double.class,
                     mappability -> (0. <= mappability && mappability <= 1.) || Double.isNaN(mappability));
