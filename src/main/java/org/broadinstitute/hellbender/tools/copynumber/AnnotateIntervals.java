@@ -17,6 +17,7 @@ import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.SimpleLoc
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotatedInterval;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.AnnotationKey;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.AnnotationMap;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.CopyNumberAnnotations;
 import org.broadinstitute.hellbender.utils.IntervalMergingRule;
 import org.broadinstitute.hellbender.utils.Nucleotide;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
@@ -158,6 +159,8 @@ public final class AnnotateIntervals extends GATKTool {
 
     @Override
     public Object onTraversalSuccess() {
+        reference.close();
+        features.close();
         logger.info(String.format("Writing annotated intervals to %s...", outputAnnotatedIntervalsFile));
         annotatedIntervals.write(outputAnnotatedIntervalsFile);
         return super.onTraversalSuccess();
@@ -183,14 +186,9 @@ public final class AnnotateIntervals extends GATKTool {
     }
 
     public static class GCContentAnnotator extends IntervalAnnotator<Double> {
-        public static final AnnotationKey<Double> ANNOTATION_KEY = new AnnotationKey<>(
-                "GC_CONTENT",
-                Double.class,
-                gcContent -> (0. <= gcContent && gcContent <= 1.) || Double.isNaN(gcContent));
-
         @Override
         public AnnotationKey<Double> getAnnotationKey() {
-            return ANNOTATION_KEY;
+            return CopyNumberAnnotations.GC_CONTENT;
         }
 
         @Override
@@ -209,16 +207,13 @@ public final class AnnotateIntervals extends GATKTool {
     public static class MappabilityAnnotator extends IntervalAnnotator<Double> {
         private final FeatureInput<BEDFeature> mappabilityTrackPath;
 
-        public MappabilityAnnotator(final FeatureInput<BEDFeature> mappabilityTrackPath) {
+        MappabilityAnnotator(final FeatureInput<BEDFeature> mappabilityTrackPath) {
             this.mappabilityTrackPath = mappabilityTrackPath;
         }
 
         @Override
         public AnnotationKey<Double> getAnnotationKey() {
-            return new AnnotationKey<>(
-                    "MAPPABILITY",
-                    Double.class,
-                    mappability -> (0. <= mappability && mappability <= 1.) || Double.isNaN(mappability));
+            return CopyNumberAnnotations.MAPPABILITY;
         }
 
         @Override

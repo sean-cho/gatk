@@ -3,11 +3,11 @@ package org.broadinstitute.hellbender.tools.copynumber.formats.collections;
 import org.apache.commons.collections4.ListUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.tools.copynumber.AnnotateIntervals;
 import org.broadinstitute.hellbender.tools.copynumber.formats.metadata.LocatableMetadata;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.AnnotatedInterval;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.AnnotationKey;
 import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.AnnotationMap;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.CopyNumberAnnotations;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.tsv.DataLine;
 import org.broadinstitute.hellbender.utils.tsv.TableColumnCollection;
@@ -70,8 +70,8 @@ public final class AnnotatedIntervalCollection extends AbstractLocatableCollecti
     public AnnotatedIntervalCollection(final File inputFile) {
         super(
                 inputFile,
-                getColumns(Collections.singletonList(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY)),
-                getAnnotatedIntervalRecordFromDataLineDecoder(Collections.singletonList(AnnotateIntervals.GCContentAnnotator.ANNOTATION_KEY)),
+                getColumns(Collections.singletonList(CopyNumberAnnotations.GC_CONTENT)),
+                getAnnotatedIntervalRecordFromDataLineDecoder(Collections.singletonList(CopyNumberAnnotations.GC_CONTENT)),
                 ANNOTATED_INTERVAL_RECORD_TO_DATA_LINE_ENCODER);
     }
 
@@ -135,5 +135,26 @@ public final class AnnotatedIntervalCollection extends AbstractLocatableCollecti
             final AnnotationMap annotationMap = new AnnotationMap(annotations);
             return new AnnotatedInterval(interval, annotationMap);
         };
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        final AbstractRecordCollection<?, ?> that = (AbstractRecordCollection<?, ?>) o;
+        return getMetadata().equals(that.getMetadata()) &&
+                getRecords().equals(that.getRecords());
+    }
+
+    @Override
+    public int hashCode() {
+        int result = getMetadata().hashCode();
+        result = 31 * result + getRecords().hashCode();
+        return result;
     }
 }

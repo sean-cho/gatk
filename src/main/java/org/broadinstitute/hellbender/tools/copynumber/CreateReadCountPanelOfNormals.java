@@ -21,7 +21,7 @@ import org.broadinstitute.hellbender.tools.copynumber.denoising.GCBiasCorrector;
 import org.broadinstitute.hellbender.tools.copynumber.denoising.HDF5SVDReadCountPanelOfNormals;
 import org.broadinstitute.hellbender.tools.copynumber.formats.collections.AnnotatedIntervalCollection;
 import org.broadinstitute.hellbender.tools.copynumber.formats.collections.SimpleCountCollection;
-import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.AnnotationKey;
+import org.broadinstitute.hellbender.tools.copynumber.formats.records.annotation.CopyNumberAnnotations;
 import org.broadinstitute.hellbender.tools.copynumber.utils.HDF5Utils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
@@ -279,12 +279,10 @@ public final class CreateReadCountPanelOfNormals extends SparkCommandLineProgram
         //get GC content (null if not provided)
         final AnnotatedIntervalCollection annotatedIntervals = CopyNumberArgumentValidationUtils.validateAnnotatedIntervals(
                 inputAnnotatedIntervalsFile, firstReadCounts, logger);
-        final AnnotationKey<Double> gcContentAnnotationKey =
-                new AnnotateIntervals.GCContentAnnotator().getAnnotationKey();
         final double[] intervalGCContent = annotatedIntervals == null
                 ? null
                 : annotatedIntervals.getRecords().stream()
-                    .mapToDouble(i -> i.getAnnotationMap().getValue(gcContentAnnotationKey))
+                    .mapToDouble(i -> i.getAnnotationMap().getValue(CopyNumberAnnotations.GC_CONTENT))
                     .toArray();
 
         //validate input read-counts files (i.e., check intervals and that only integer counts are contained)
