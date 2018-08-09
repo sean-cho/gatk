@@ -931,22 +931,30 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                 .alleles(genotypeAlleles).make();
     }
 
-    private static Map<String, Object> composeAdditionalGenotypeAttributes(boolean emitStratifiedAlleleDepths, boolean emitStratifiedLikelihoods, double informativePhredLikelihoodDifferenceThreshold, GenotypeLikelihoodCalculator genotypeCalculator, ReadLikelihoods<SVGenotypingContext.Allele> splitsReadlikelihoods, ReadLikelihoods<SVGenotypingContext.Allele> insertSizeLikelihoods, ReadLikelihoods<SVGenotypingContext.Allele> discordantOrientationLikelihoods) {
-        final Map<String, Object> stratifiedAttributes = new LinkedHashMap<>((emitStratifiedAlleleDepths ? 3 : 0) + (emitStratifiedLikelihoods ? 3 : 0));
-        if (emitStratifiedAlleleDepths) {
-            stratifiedAttributes.put(GATKSVVCFConstants.TEMPLATE_MAPPING_LIKELIHOODS, calculateAD(splitsReadlikelihoods, informativePhredLikelihoodDifferenceThreshold));
-            stratifiedAttributes.put(GATKSVVCFConstants.INSERT_SIZE_LIKELIHOODS, calculateAD(insertSizeLikelihoods, informativePhredLikelihoodDifferenceThreshold));
-            stratifiedAttributes.put(GATKSVVCFConstants.DISCORDANT_PAIR_ORIENTATION_ALLELE_DEPTH, calculateAD(discordantOrientationLikelihoods, informativePhredLikelihoodDifferenceThreshold));
+    private static Map<String, Object> composeAdditionalGenotypeAttributes(final boolean emitStratifiedAlleleDepths, final boolean emitStratifiedLikelihoods, double informativePhredLikelihoodDifferenceThreshold, GenotypeLikelihoodCalculator genotypeCalculator, ReadLikelihoods<SVGenotypingContext.Allele> splitsReadlikelihoods, ReadLikelihoods<SVGenotypingContext.Allele> insertSizeLikelihoods, ReadLikelihoods<SVGenotypingContext.Allele> discordantOrientationLikelihoods) {
+        if (!emitStratifiedAlleleDepths && !emitStratifiedLikelihoods) {
+            return Collections.emptyMap();
+        } else {
+            splitsReadlikelihoods.removeUniformativeReads(0.0);
+            discordantOrientationLikelihoods.removeUniformativeReads(0.0);
+            insertSizeLikelihoods.removeUniformativeReads(0.0);
+            final Map<String, Object> stratifiedAttributes = new LinkedHashMap<>((emitStratifiedAlleleDepths ? 3 : 0) + (emitStratifiedLikelihoods ? 3 : 0));
+
+            if (emitStratifiedAlleleDepths) {
+                stratifiedAttributes.put(GATKSVVCFConstants.TEMPLATE_MAPPING_ALLELE_DEPTH, calculateAD(splitsReadlikelihoods, informativePhredLikelihoodDifferenceThreshold));
+                stratifiedAttributes.put(GATKSVVCFConstants.INSERT_SIZE_ALLELE_DEPTH, calculateAD(insertSizeLikelihoods, informativePhredLikelihoodDifferenceThreshold));
+                stratifiedAttributes.put(GATKSVVCFConstants.DISCORDANT_PAIR_ORIENTATION_ALLELE_DEPTH, calculateAD(discordantOrientationLikelihoods, informativePhredLikelihoodDifferenceThreshold));
+            }
+            if (emitStratifiedLikelihoods) {
+                stratifiedAttributes.put(GATKSVVCFConstants.TEMPLATE_MAPPING_LIKELIHOODS,
+                        genotypeCalculator.genotypeLikelihoods(splitsReadlikelihoods.sampleMatrix(0)).getAsPLs());
+                stratifiedAttributes.put(GATKSVVCFConstants.INSERT_SIZE_LIKELIHOODS,
+                        genotypeCalculator.genotypeLikelihoods(insertSizeLikelihoods.sampleMatrix(0)).getAsPLs());
+                stratifiedAttributes.put(GATKSVVCFConstants.DISCORDANT_PAIR_ORIENTATION_LIKELIHOODS,
+                        genotypeCalculator.genotypeLikelihoods(discordantOrientationLikelihoods.sampleMatrix(0)).getAsPLs());
+            }
+            return stratifiedAttributes;
         }
-        if (emitStratifiedLikelihoods) {
-            stratifiedAttributes.put(GATKSVVCFConstants.TEMPLATE_MAPPING_LIKELIHOODS,
-                    genotypeCalculator.genotypeLikelihoods(splitsReadlikelihoods.sampleMatrix(0)).getAsPLs());
-            stratifiedAttributes.put(GATKSVVCFConstants.INSERT_SIZE_LIKELIHOODS,
-                    genotypeCalculator.genotypeLikelihoods(insertSizeLikelihoods.sampleMatrix(0)).getAsPLs());
-            stratifiedAttributes.put(GATKSVVCFConstants.DISCORDANT_PAIR_ORIENTATION_ALLELE_DEPTH,
-                    genotypeCalculator.genotypeLikelihoods(discordantOrientationLikelihoods.sampleMatrix(0)).getAsPLs());
-        }
-        return stratifiedAttributes;
     }
 
     private static List<Allele> genotypeAlleleles(final SVGenotypingContext context, final GenotypeLikelihoods likelihoods, final int gq) {

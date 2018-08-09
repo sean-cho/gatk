@@ -296,7 +296,7 @@ public final class GATKSVVCFHeaderLines {
         if (includeStratifiedLikelihoods) {
             result.add(new VCFFormatHeaderLine(GATKSVVCFConstants.TEMPLATE_MAPPING_LIKELIHOODS, VCFHeaderLineCount.G, VCFHeaderLineType.Integer, "Genotype likelihoods considering read mapping information only"));
             result.add(new VCFFormatHeaderLine(GATKSVVCFConstants.INSERT_SIZE_LIKELIHOODS, VCFHeaderLineCount.G, VCFHeaderLineType.Integer, "Genotype likelihoods considering insert size information only"));
-            result.add(new VCFFormatHeaderLine(GATKSVVCFConstants.DISCORDANT_PAIR_ORIENTATION_ALLELE_DEPTH, VCFHeaderLineCount.G, VCFHeaderLineType.Integer, "Genotype likelihoods considering discordant pair information only"));
+            result.add(new VCFFormatHeaderLine(GATKSVVCFConstants.DISCORDANT_PAIR_ORIENTATION_LIKELIHOODS, VCFHeaderLineCount.G, VCFHeaderLineType.Integer, "Genotype likelihoods considering discordant pair information only"));
         }
         result.add(new VCFInfoHeaderLine(GATKSVVCFConstants.EXPECTED_RELATIVE_ALLELE_FREQUENCIES, VCFHeaderLineCount.R, VCFHeaderLineType.Float, "Relative frequencies of each allele in a heterozyous individual"));
         return result;

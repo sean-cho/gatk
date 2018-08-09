@@ -143,7 +143,7 @@ final class SVGenotypingContext {
         this.refHaplotype = this.haplotypes.stream()
                 .filter(SVHaplotype::isReference)
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("no reference haplotype provided " + this.haplotypes.stream().map(SVHaplotype::getName).collect(Collectors.joining(","))));
+                .orElseThrow(() -> new IllegalArgumentException("no reference haplotype provided for " + variant.getUniqueID() + "; haplotypes: " + this.haplotypes.stream().map(SVHaplotype::getName).collect(Collectors.joining(","))));
         this.altHaplotype = this.haplotypes.stream()
                 .filter(SVHaplotype::isAlternative)
                 .findFirst()
