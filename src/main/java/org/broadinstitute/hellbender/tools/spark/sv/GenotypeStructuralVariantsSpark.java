@@ -1,5 +1,7 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
+import htsjdk.samtools.Cigar;
+import htsjdk.samtools.CigarElement;
 import htsjdk.samtools.CigarOperator;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMFileWriter;
@@ -88,11 +90,89 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
- * Genotypes structural variants.
+ * Genotypes structural variants as discovered using {@link StructuralVariationDiscoveryPipelineSpark}.
+ *
+ * <h2>Inputs</h2>
  * <p>
- *     This tools completes a SV discovery with the individual sample genotypes.
+ *     This tools takes on the following required inputs:
+ *     <ul>
+ *         <li>a discovered SV vcf file or files (-V or --variant argument),</li>
+ *         <li>an assembled contigs alignment (-assemblies or --assembled-contigs-file argument) file
+ *         <li>and the name of the directory that contains the assemblies input fastq files (-fastq-dir or --fastq-assembly-directory argument).</li>
+ *     </ul>
  * </p>
  *
+ * <h2>Outputs</h2>
+ * <p>
+ *     The main output of this tool is a new enriched vcf that contains the information in the
+ *     input vcf file plus genotypes calls for the supported structural variant types.
+ *     Non-supported variants are filtered out.
+ * </p>
+ *
+ * <p>
+ *     By default, the output genotype would include the total likelihoods and allele depth counts.
+ *     However you can ask for stratified likelihoods and allele depths to be emitted for
+ *     split-read, interval-size and discordant read pair information
+ *     (--emit-stratified-likelihoods and --emit-stratified-allele-depths arguments).
+ * </p>
+ *
+ * <h3>Diagnosys output alignment</h3>
+ * <p>
+ *     In addition, you can request an output alignment file that encloses for each genotyped variant
+ *     the reconstructed haplotypes, overlapping contigs and read pairs involved in the genotyping
+ *     process (-bamout --output-diagnosys-alignment argument).
+ * </p>
+ * <p>
+ *     Nonetheless, this output is provided for diagnosys/debugging purposes and may add to much
+ *     run-time so is only recommended to be use when analyzing small regions.
+ * </p>
+ * <p>
+ *     Records are annotated with VC:Z:xxx tag with a unique id that identifies the corresponding variant; this can be used to
+ *     disambiguate when variants are close to each other.
+ * </p>
+ * <p>
+ *     Records with names "ref" and "alt" represent the <i>reference haplotype</i> and the <i>alternative haplotype</i> for that variant.
+ *     These are synthetic records. There is always one and only one of each for each variant. These are all part of the {@code "HAP"} read-group.
+ * </p>
+ * <p>
+ *     Each variant can have a number of <i>assembly contigs</i> with ids of the form <i>asmMMMMMM:tigNNNNNN</i>. These are the ones that
+ *     overlap any of the break-points of that variant in the input assemblies file.
+ *     These are all part of the {@code "CTG"} read-group.
+ * </p>
+ * <p>
+ *     Finally the actual input read/template records are output under the {@code "TMPL"} read group.
+ * </p>
+ *  <p>
+ *    Contig and template record have a number of annotations indicating amongst other things what allele/haplotype they support:
+ *    <dl>
+ *         <dt>HP</dt><dd>the haplotype the seem to support, {@code 'ref'} for reference, {@code 'alt'} for alternative and {@code '.'} for neither. (e.g. {@code "HP:Z:ref", "HP:Z:alt", "HP:Z:."}).</dd>
+ *         <dt>HQ</dt><dd>the confidence in the support for the haplotype in {@code "HP"} (e.g. {@code "HQ:Z:10.0"}).
+ *                        This value is equal to the difference between the score for the supported and the other haplotype</dd></dt>
+ *         <dt>RS</dt><dd>the reference support score screen (e.g. {@code "RS:Z:-100,55,1,2,30,0"}).</dd>
+ *         <dt>XS</dt><dd>the alternative allele score screen (e.g. {@code "XS:Z:-1241,134,2,1,5,1}).</dd>
+ *         <dt>RA</dt><dd>alignment versus the "refHaplotype" haplotype for contigs and vs the reference for haplotypes</dd>
+ *         <dt>XA</dt><dd>alignment versus the "altHaplotype" haplotype for contigs. It does not apply to haplotypes</dd>
+ *         <dt>VC</dt><dd>coordinate of the targeted variant {@code chr:pos}</dd>
+ *         <dt>lT</dt><dd>likelihoods under the reference and alternative haplotypes (templates only)</dd>
+ *         <dt>lI</dt><dd>insert size likelihoods under the reference and alternative haplotypes (templates only)</dd>
+ *         <dt>lD</dt><dd>discordant pair orientation under the reference and alternative haplotypes (templates only)</dd>
+ *         <dt>lR</dt><dd>split read likelihoods under the reference and alternative haplotypes (templates only)</dd>
+ *     </dl>
+ * </p>
+ * <p>
+ *     {@code RS} and {@code XS} score annotations follows this format:
+ * </p>
+ *     <pre>Score,matches,mismatches,indels,indelLength,reversals</pre>
+ * <p>
+ *     Where:
+ *     <dl>
+ *         <dt>score</dt><dd>score the contig given the happlotype (refHaplotype. for {@code RS}, altHaplotype. for {@code XS})</dd>
+ *         <dt>matches</dt><dd>number of base call matches</dd>
+ *         <dt>mismatches</dt><dd>number of base call mismatches</dd>
+ *         <dt>indels</dt><dd>number of insertion or deletions (i.e. gap-openings)</dd>
+ *         <dt>indelLength</dt><dd>total length of insertion and deletions (i.e. gap-openings + gap-extensions)</dd>
+ *     </dl>
+ * </p>
  */
 @CommandLineProgramProperties(summary = "genotype SV variant call files",
         oneLineSummary = "genotype SV variant call files",
@@ -105,8 +185,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     public static final String FASTQ_FILE_DIR_FULL_NAME = "fastq-assembly-directory";
     public static final String CTG_FILE_SHORT_NAME = "assemblies";
     public static final String CTG_FILE_FULL_NAME = "assembled-contigs-file";
-    public static final String OUTPUT_ALIGNMENT_SHORT_NAME = "output-alignment";
-    public static final String OUTPUT_ALIGNMENT_FULL_NAME = "output-alignment-file";
+    public static final String OUTPUT_ALIGNMENT_SHORT_NAME = "bamout";
+    public static final String OUTPUT_ALIGNMENT_FULL_NAME = "output-diagnosys-alignment";
     public static final String SHARD_SIZE_SHORT_NAME = "shard";
     public static final String SHARD_SIZE_FULL_NAME = "shard-size";
     public static final String INSERT_SIZE_DISTR_SHORT_NAME = "ins-size-dist";
@@ -123,6 +203,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
 
     public static final String HAPLOTYPE_READ_GROUP = "HAP";
     public static final String CONTIG_READ_GROUP = "CTG";
+    public static final String TEMPLATE_READ_GROUP = "TMPL";
     public static final String HAPLOTYPE_CALL_TAG = "HP";
     public static final String HAPLOTYPE_QUAL_TAG = "HQ";
     public static final String REFERENCE_SCORE_TAG = "RS";
@@ -130,6 +211,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     public static final String ALTERNATIVE_SCORE_TAG = "XS";
     public static final String ALTERNATIVE_ALIGNMENT_TAG = "XA";
     public static final String VARIANT_CONTEXT_TAG = "VC";
+    public static final String TOTAL_LIKELIHOOD_TAG = "lT";
+    public static final String STRATIFIED_LIKELIHOOD_TAG_PREFIX = "l";
 
     /**
      * If the traversal intervals is larger than this fraction of the reference, we simply process all contig alignments
@@ -693,8 +776,11 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         haplotypeReadGroup.setSample(sampleName);
         final SAMReadGroupRecord contigReadGroup = new SAMReadGroupRecord(CONTIG_READ_GROUP);
         contigReadGroup.setSample(sampleName);
+        final SAMReadGroupRecord templateReadGroup = new SAMReadGroupRecord(TEMPLATE_READ_GROUP);
+        templateReadGroup.setSample(sampleName);
         outputHeader.addReadGroup(haplotypeReadGroup);
         outputHeader.addReadGroup(contigReadGroup);
+        outputHeader.addReadGroup(templateReadGroup);
         final SAMProgramRecord programRecord = new SAMProgramRecord(getProgramName());
         programRecord.setCommandLine(getCommandLine());
         outputHeader.addProgramRecord(programRecord);
@@ -774,6 +860,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         final boolean emitStratifiedAlleleDepths = this.emitStratifiedAlleleDepths;
         final boolean emitStratifiedLikelihoods = this.emitStratifiedLikelihoods;
         final double informativePhredLikelihoodDifferenceThreshold = this.informativeTemplateDifferencePhred;
+        final int paddingSize = this.paddingSize;
         return input.mapPartitions(it -> {
             final SAMSequenceDictionary dictionary = broadCastDictionary.getValue();
             final Stream<SVGenotypingContext> contexts =
@@ -797,7 +884,6 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         adjustLikelihoodCalculatorAlleleFrequencies(context, insertSizeDistribution, genotypeCalculator);
 
                         context.reduceNumberOfTemplatesTo(MAX_NUMBER_OF_TEMPLATES_IN_CONTEXT);
-                        final List<SVHaplotype> haplotypes = context.haplotypes;
                         final List<Template> templates = context.templates;
 
                         final TemplateMappingTable scoreTable = remapTemplatesOnHaplotypes(context, imageCreator, realignmentScoreArguments, imageCache);
@@ -818,7 +904,12 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                         if (outputAlignmentHeader == null) {
                             return Call.of(outputBuilder.make());
                         } else {
-                            return Call.of(outputBuilder.make(), composeDiagnosysReads(context, outputAlignmentHeader, dictionary, realignmentScoreArguments));
+                            final List<SimpleInterval> relevantIntervals = context.variant.getBreakPointIntervals(paddingSize, true);
+                            final Map<String, ReadLikelihoods<SVGenotypingContext.Allele>> stratifiedLikelihoods = new HashMap<>(3);
+                            stratifiedLikelihoods.put(GATKSVVCFConstants.TEMPLATE_MAPPING_LIKELIHOODS, splitsReadlikelihoods);
+                            stratifiedLikelihoods.put(GATKSVVCFConstants.INSERT_SIZE_LIKELIHOODS, insertSizeLikelihoods);
+                            stratifiedLikelihoods.put(GATKSVVCFConstants.DISCORDANT_PAIR_ORIENTATION_LIKELIHOODS, discordantOrientationLikelihoods);
+                            return Call.of(outputBuilder.make(), composeDiagnosysReads(context, outputAlignmentHeader, dictionary, realignmentScoreArguments, relevantIntervals, totalLikelihoods, stratifiedLikelihoods, informativePhredLikelihoodDifferenceThreshold));
                         }
                     }).iterator();
             imageCache.closeInstanceAndDeleteFiles();
@@ -826,18 +917,187 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         });
     }
 
-    private static List<SAMRecord> composeDiagnosysReads(final SVGenotypingContext context, final SAMFileHeader outputAlignmentHeader, final SAMSequenceDictionary dictionary, RealignmentScoreParameters parameters) {
+    private static List<SAMRecord> composeDiagnosysReads(final SVGenotypingContext context, final SAMFileHeader outputAlignmentHeader, final SAMSequenceDictionary dictionary,
+                                                         final RealignmentScoreParameters parameters,
+                                                         final List<SimpleInterval> relevantIntervals,
+                                                         final ReadLikelihoods<SVGenotypingContext.Allele> totalLikelihoods,
+                                                         final Map<String, ReadLikelihoods<SVGenotypingContext.Allele>> stratifiedLikelihoods, final double informativePherdDiff) {
         final List<SAMRecord> result = new ArrayList<>(context.numberOfHaplotypes + context.numberOfTemplates);
         for (final SVHaplotype haplotype : context.haplotypes) {
             final List<SAMRecord> haplotypesReads = composeAlignedOutputHaplotypeSAMRecords(outputAlignmentHeader, context, haplotype, parameters);
             result.addAll(haplotypesReads);
+        }
+        for (final Template template : context.templates) {
+            final List<SAMRecord> templateReads = composeAlignedOutputTemplateSAMRecords(outputAlignmentHeader, context, template, relevantIntervals, totalLikelihoods, stratifiedLikelihoods, informativePherdDiff);
+            result.addAll(templateReads);
         }
         //We do the sort outside.
         //result.sort(Comparator.comparingInt(SAMRecord::getReferenceIndex).thenComparingInt(SAMRecord::getAlignmentStart));
         return result;
     }
 
+    private static List<SAMRecord> composeAlignedOutputTemplateSAMRecords(final SAMFileHeader outputAlignmentHeader, final SVGenotypingContext context, final Template template, final List<SimpleInterval> relevantIntervals,
+                                                                          final ReadLikelihoods<SVGenotypingContext.Allele> totalLikelihoods,
+                                                                          final Map<String,ReadLikelihoods<SVGenotypingContext.Allele>> stratifiedLikelihoods, final double informativePhredDiff) {
 
+        final boolean hasRelevantMapping = template.fragments().stream()
+                .flatMap(fragment -> fragment.alignmentIntervals().stream())
+                .anyMatch(interval -> relevantIntervals.stream().anyMatch(target -> target.overlaps(interval.referenceSpan)));
+
+        if (!hasRelevantMapping && (totalLikelihoods.containsRead(0, template.name()) ||
+                    stratifiedLikelihoods.values().stream().anyMatch(lk -> lk.containsRead(0, template.name())))) {
+            return Collections.singletonList(composeAlignedOutputTemplateSAMRecordForUnmapped(outputAlignmentHeader, template, context, totalLikelihoods, stratifiedLikelihoods, informativePhredDiff));
+        } else if (hasRelevantMapping) {
+            return composeAlignedOutputTemplateSAMRecordsForMapped(outputAlignmentHeader, template, context, relevantIntervals, totalLikelihoods, stratifiedLikelihoods, informativePhredDiff);
+        } else {
+            return Collections.emptyList();
+        }
+    }
+
+    private static List<SAMRecord> composeAlignedOutputTemplateSAMRecordsForMapped(final SAMFileHeader outputAlignmentHeader, final Template template, final SVGenotypingContext context, final List<SimpleInterval> relevantIntervals, final ReadLikelihoods<SVGenotypingContext.Allele> totalLikelihoods, final Map<String, ReadLikelihoods<SVGenotypingContext.Allele>> stratifiedLikelihoods, final double informativePhredDiff) {
+        final Collection<SAMRecord.SAMTagAndValue> likelihoodAnnotations = composeLikelihoodsAnnotations(template.name(), totalLikelihoods, stratifiedLikelihoods, informativePhredDiff);
+
+        return template.fragments().stream()
+                .flatMap(fragment ->
+                    fragment.alignmentIntervals().stream()
+                            .filter(ai -> relevantIntervals.stream().anyMatch(target -> target.overlaps(ai.referenceSpan)))
+                            .map(ai -> ai.toSAMRecord(outputAlignmentHeader, template.name(), fragment.bases(), false,
+                                    fragment == template.fragments().get(0) ? SAMFlag.FIRST_OF_PAIR.intValue() : 0, likelihoodAnnotations))
+                )
+                .collect(Collectors.toList());
+    }
+
+    private static Collection<SAMRecord.SAMTagAndValue> composeLikelihoodsAnnotations(final String name, final ReadLikelihoods<SVGenotypingContext.Allele> totalLikelihoods, final Map<String,ReadLikelihoods<SVGenotypingContext.Allele>> stratifiedLikelihoods, final double informativePhredDiff) {
+        final Collection<SAMRecord.SAMTagAndValue> result = new ArrayList<>(10);
+        if (totalLikelihoods.containsRead(0, name)) {
+            result.add(new SAMRecord.SAMTagAndValue(TOTAL_LIKELIHOOD_TAG, composeLikelihoodTagValue(totalLikelihoods, name)));
+            result.add(new SAMRecord.SAMTagAndValue(HAPLOTYPE_CALL_TAG, composeLikelihoodCall(totalLikelihoods, name, informativePhredDiff)));
+        } else {
+            result.add(new SAMRecord.SAMTagAndValue(HAPLOTYPE_CALL_TAG, Allele.NO_CALL_STRING));
+        }
+        for (final Map.Entry<String, ReadLikelihoods<SVGenotypingContext.Allele>> entry : stratifiedLikelihoods.entrySet()) {
+            if (entry.getValue().containsRead(0, name)) {
+                result.add(new SAMRecord.SAMTagAndValue(STRATIFIED_LIKELIHOOD_TAG_PREFIX + entry.getKey().charAt(0), composeLikelihoodTagValue(entry.getValue(), name)));
+            }
+        }
+        return result;
+    }
+
+    private static String composeLikelihoodTagValue(final ReadLikelihoods<SVGenotypingContext.Allele> lk, final String name) {
+        final int readIndex = lk.readIndex(0, name);
+        if (readIndex < 0) {
+            return VCFConstants.MISSING_VALUE_v4;
+        } else {
+            return IntStream.range(0, lk.numberOfAlleles())
+             .mapToDouble(i -> lk.sampleMatrix(0).get(i, readIndex))
+                    .mapToObj(d -> String.format("%.1f", d == 0.00 ? 0.0 : d * -10))
+                    .collect(Collectors.joining(","));
+        }
+    }
+
+    private static String composeLikelihoodCall(final ReadLikelihoods<SVGenotypingContext.Allele> lk, final String name, final double minimumPhredDiff) {
+        final int readIndex = lk.readIndex(0, name);
+        if (readIndex < 0) {
+            return ".";
+        } else {
+            final double[] values = IntStream.range(0, lk.numberOfAlleles())
+                    .mapToDouble(i -> lk.sampleMatrix(0).get(i, readIndex))
+                    .toArray();
+            double bestValue = values[0];
+            double secondBestValue = Double.NEGATIVE_INFINITY;
+            int bestIndex = 0;
+            for (int i = 0; i < values.length; i++) {
+                if (values[i] > bestValue) {
+                    secondBestValue = bestValue;
+                    bestValue = values[i];
+                    bestIndex = i;
+                } else if (values[i] > secondBestValue) {
+                    secondBestValue = values[i];
+                }
+            }
+            final double conf = (bestValue - secondBestValue) * 10;
+            if (conf < minimumPhredDiff) {
+                return Allele.NO_CALL_STRING;
+            } else if (lk.alleles().get(bestIndex).isReference()) {
+                return SVHaplotype.REF_HAPLOTYPE_NAME;
+            } else {
+                return SVHaplotype.ALT_HAPLOTYPE_NAME;
+            }
+        }
+    }
+
+    private static SAMRecord composeAlignedOutputTemplateSAMRecordForUnmapped(final SAMFileHeader header, final Template template, final SVGenotypingContext context, ReadLikelihoods<SVGenotypingContext.Allele> totalLikelihoods, Map<String, ReadLikelihoods<SVGenotypingContext.Allele>> stratifiedLikelihoods, double informativePhredDiff) {
+        final SAMRecord sam = new SAMRecord(header);
+        sam.setAlignmentStart(context.variant.getStart());
+        sam.setReferenceName(context.variant.getContig());
+        sam.setReadUnmappedFlag(false);
+        final int length = template.fragments().stream().mapToInt(fragment -> fragment.length() + 20).sum() - 20;
+        int nextBase = 0;
+        final byte[] sequence = new byte[length];
+        final List<AlignmentInterval> intervals = new ArrayList<>(10);
+        for (final Template.Fragment fragment : template.fragments()) {
+            final int offset = nextBase;
+            final int tail = sequence.length - fragment.length() - nextBase;
+            fragment.alignmentIntervals().stream()
+                    .map(original -> new AlignmentInterval(original.referenceSpan,
+                            original.startInAssembledContig + offset,
+                            original.endInAssembledContig + offset,
+                            addClippingToCigar(original.cigarAlong5to3DirectionOfContig,
+                                    original.forwardStrand ? offset : tail,
+                                    original.forwardStrand ? tail : offset, offset != 0 && original != fragment.alignmentIntervals().get(0)),
+                            original.forwardStrand,
+                            original.mapQual,
+                            original.mismatches,
+                            original.alnScore,
+                            original.alnModType))
+                    .forEach(intervals::add);
+            fragment.copyBases(sequence, nextBase, 0, fragment.length());
+            nextBase += fragment.length();
+            if (nextBase < sequence.length) {
+                Arrays.fill(sequence, nextBase, nextBase += 20, (byte) 'N');
+            }
+        }
+        sam.setAttribute(SAMTag.SA.name(), AlignmentInterval.encode(intervals));
+        sam.setReadBases(sequence);
+        sam.setProperPairFlag(false);
+        sam.setReadNegativeStrandFlag(false);
+        sam.setMappingQuality(0);
+        sam.setAttribute(SAMTag.RG.name(), TEMPLATE_READ_GROUP);
+        final Collection<SAMRecord.SAMTagAndValue> likelihoodAnnotations = composeLikelihoodsAnnotations(template.name(), totalLikelihoods, stratifiedLikelihoods, informativePhredDiff);
+        for (final SAMRecord.SAMTagAndValue annotation : likelihoodAnnotations) {
+            sam.setAttribute(annotation.tag, annotation.value);
+        }
+        return sam;
+    }
+
+    private static Cigar addClippingToCigar(final Cigar original, final int left, final int right, final boolean hardIfUndefined) {
+        if (left <= 0 && right <= 0) {
+            return new Cigar(original.getCigarElements());
+        } else {
+            final List<CigarElement> newElements = new ArrayList<>(original.getCigarElements().size() + 2);
+            if (left > 0) {
+                if (original.getCigarElement(0).getOperator().isClipping()) {
+                    newElements.add(new CigarElement(original.getCigarElement(0).getLength() + left,
+                            original.getCigarElement(0).getOperator()));
+                    newElements.addAll(original.getCigarElements().subList(1, original.numCigarElements()));
+                } else {
+                    newElements.add(new CigarElement(left, hardIfUndefined ? CigarOperator.H : CigarOperator.S));
+                    newElements.addAll(original.getCigarElements());
+                }
+            } else {
+                newElements.addAll(original.getCigarElements());
+            }
+            if (right > 0) {
+                final CigarElement lastElement = newElements.get(newElements.size() - 1);
+                if (lastElement.getOperator().isClipping()) {
+                    newElements.set(newElements.size() - 1, new CigarElement(right + lastElement.getLength(), lastElement.getOperator()));
+                } else {
+                    newElements.add(new CigarElement(right, hardIfUndefined ? CigarOperator.H : CigarOperator.S));
+                }
+            }
+            return new Cigar(newElements);
+        }
+    }
 
     private static List<SAMRecord> composeAlignedOutputHaplotypeSAMRecords(final SAMFileHeader header, final SVGenotypingContext context, final SVHaplotype haplotype, final RealignmentScoreParameters parameters) {
         final String variantUID = context.variant.getUniqueID();
@@ -851,13 +1111,9 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                             haplotype.getBases(),
                             ai != primaryAlignment,
                             ai != primaryAlignment ? SAMFlag.SUPPLEMENTARY_ALIGNMENT.intValue() : 0, null);
-                    sam.setReadName(haplotype.getName());
                     sam.setAttribute(VARIANT_CONTEXT_TAG, variantUID);
-                    sam.setReadUnmappedFlag(false);
                     sam.setReadPairedFlag(false);
-                    sam.setAlignmentStart(ai.referenceSpan.getStart());
-                    sam.setReferenceName(ai.referenceSpan.getContig());
-                    sam.setReadNegativeStrandFlag(!ai.forwardStrand);
+                    composeAndSetSATag(sam, haplotype);
                     if (haplotype.isContig()) {
                         annotateContigOutputSAMRecord(sam, (SVContig) haplotype);
                     } else {
@@ -870,16 +1126,15 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
 
     private static void annotateContigOutputSAMRecord(final SAMRecord outputRecord, final SVContig contig) {
         outputRecord.setAttribute(SAMTag.RG.name(), CONTIG_READ_GROUP);
-        final double refScore = contig.getReferenceScore();
-        contig.getAlternativeScore();
-        final double altScore = contig.getAlternativeScore();
-        final double callQual = Math.min(contig.mappingQuality(), Math.abs(refScore - altScore) * -10);
+        final double refScore = contig.getReferenceHaplotypeScore();
+        contig.getAlternativeHaplotypeScore();
+        final double altScore = contig.getAlternativeHaplotypeScore();
+        final double callQual = contig.getCallQuality();
         final String call = callQual == 0 ? Allele.NO_CALL_STRING : (refScore > altScore ? SVHaplotype.REF_HAPLOTYPE_NAME : SVHaplotype.ALT_HAPLOTYPE_NAME);
         outputRecord.setAttribute(HAPLOTYPE_CALL_TAG, call);
         outputRecord.setAttribute(HAPLOTYPE_QUAL_TAG, String.format("%.2f", callQual));
         outputRecord.setAttribute(REFERENCE_SCORE_TAG, contig.getReferenceScoreString());
         outputRecord.setAttribute(ALTERNATIVE_SCORE_TAG, contig.getAlternativeScoreString());
-        outputRecord.setAttribute(SAMTag.SA.name(), AlignmentInterval.encode(contig.getReferenceAlignment()) + ';');
         outputRecord.setAttribute(REFERENCE_ALIGNMENT_TAG, AlignmentInterval.encode(contig.geReferenceHaplotypeAlignment()) + ';');
         outputRecord.setAttribute(ALTERNATIVE_ALIGNMENT_TAG, AlignmentInterval.encode(contig.getAlternativeHaplotypeAlignment()) + ';');
         outputRecord.setReadPairedFlag(false);
@@ -898,10 +1153,22 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         outputRecord.setAttribute(HAPLOTYPE_QUAL_TAG, String.format("%.2f", callQual));
         outputRecord.setAttribute(REFERENCE_SCORE_TAG, String.format("%.2f", refScore));
         outputRecord.setAttribute(ALTERNATIVE_SCORE_TAG, String.format("%.2f", altScore));
-        outputRecord.setAttribute(SAMTag.SA.name(), AlignmentInterval.encode(haplotype.getReferenceAlignment()) + ';');
         outputRecord.setReadPairedFlag(false);
         outputRecord.setDuplicateReadFlag(false);
         outputRecord.setSecondOfPairFlag(false);
+    }
+
+    private static void composeAndSetSATag(SAMRecord outputRecord, SVHaplotype haplotype) {
+        final List<AlignmentInterval> otherAlignments = haplotype.getReferenceAlignment().stream()
+                .filter(ai -> ai.referenceSpan.getStart() != outputRecord.getAlignmentStart() ||
+                              !Objects.equals(ai.referenceSpan.getContig(), outputRecord.getReferenceName()) ||
+                              ai.referenceSpan.getEnd() != outputRecord.getAlignmentEnd() ||
+                              !Objects.equals(ai.cigarAlong5to3DirectionOfContig, outputRecord.getCigar()) ||
+                              ai.forwardStrand == outputRecord.getReadNegativeStrandFlag())
+                .collect(Collectors.toList());
+        if (!otherAlignments.isEmpty()) {
+            outputRecord.setAttribute(SAMTag.SA.name(), AlignmentInterval.encode(otherAlignments) + ';');
+        }
     }
 
     private static Genotype composeGenotype(final SVGenotypingContext context,
@@ -1102,9 +1369,9 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
             final List<AlignmentInterval> alignment = intervals.get(i);
             final RealignmentScore score = RealignmentScore.calculate(realignmentScoreArguments, haplotype.getBases(), contig.getBases(), alignment);
             if (haplotype.isReference()) {
-                contig.setReferenceAlignment(alignment, score);
+                contig.setReferenceHaplotypeAlignment(alignment, score);
             } else {
-                contig.setAlternativeAlignment(alignment, score);
+                contig.setAlternativeHaplotypeAlignment(alignment, score);
             }
         }
     }
@@ -1200,7 +1467,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                 haplotypeAltScore = 0;
                 haplotypeRefScore = -.1 * realignmentScoreArguments.interHaplotypePenalty;
             }
-            final double maxMQ = contig.getMinimumMappingQuality();
+            final double maxMQ = contig.getCallQuality();
             final double base = Math.max(haplotypeAltScore, haplotypeRefScore);
             haplotypeAltScore -= base;
             haplotypeRefScore -= base;
@@ -1289,8 +1556,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
     }
 
     private static ReadLikelihoods<SVGenotypingContext.Allele> calculateDiscordantOrientationLikelihoods(final SVGenotypingContext context,
-                                                                                                         final RealignmentScoreParameters penalties,
-                                                                                                         final TemplateMappingTable scoreTable) {
+                                                                                                         final RealignmentScoreParameters penalties, final TemplateMappingTable scoreTable) {
         final ReadLikelihoods<SVGenotypingContext.Allele> result = context.newLikelihoods();
         final LikelihoodMatrix<SVGenotypingContext.Allele> matrix = result.sampleMatrix(0);
         for (int t = 0; t < context.numberOfTemplates; t++) {
@@ -1343,7 +1609,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
             case DEL:
             case DUP:
             case INV:
-                return !ctx.hasAttribute(GATKSVVCFConstants.IMPRECISE);
+                return true;
+                //return !ctx.hasAttribute(GATKSVVCFConstants.IMPRECISE);
             default:
                 return false;
         }

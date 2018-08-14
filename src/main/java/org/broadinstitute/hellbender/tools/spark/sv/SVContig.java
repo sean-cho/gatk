@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalDouble;
 
 /**
  * Created by valentin on 9/16/17.
@@ -29,27 +30,19 @@ import java.util.Optional;
 @DefaultSerializer(SVContig.Serializer.class)
 public class SVContig extends ArraySVHaplotype {
 
-    private static final long serialVersionUID = 1L;
 
-
-    public double getReferenceScore() {
-        if (isReference()) {
-            return 0.0;
-        } else if (isAlternative()) {
-            return Double.NEGATIVE_INFINITY;
-        } else {
-            return referenceAlignmentScore == null ? Double.NaN : referenceAlignmentScore.getLog10Prob();
-        }
+    /**
+     * @return {@link Double#NaN} if there is no alignment againts the reference haplotype.
+     */
+    public double getReferenceHaplotypeScore() {
+        return referenceAlignmentScore == null ? Double.NaN : referenceAlignmentScore.getLog10Prob();
     }
 
-    public double getAlternativeScore() {
-        if (name.equals("altHaplotype")) {
-            return 0.0;
-        } else if (name.equals("refHaplotype")) {
-            return Double.NEGATIVE_INFINITY;
-        } else {
-            return alternativeAlignmentScore == null ? Double.NaN  : alternativeAlignmentScore.getLog10Prob();
-        }
+    /**
+     * @return {@link Double#NaN} if there is no alignment againts the alternative haplotype.
+     */
+    public double getAlternativeHaplotypeScore() {
+        return alternativeAlignmentScore == null ? Double.NaN  : alternativeAlignmentScore.getLog10Prob();
     }
 
     public String getAlternativeScoreString() {
@@ -60,16 +53,11 @@ public class SVContig extends ArraySVHaplotype {
         return referenceAlignmentScore == null ? "." : referenceAlignmentScore.toString();
     }
 
-    enum Call {
-        REF, ALT, NOCALL;
-    }
-
     private List<AlignmentInterval> referenceAlignment;
     private List<AlignmentInterval> alternativeAlignment;
     private RealignmentScore referenceAlignmentScore;
     private RealignmentScore alternativeAlignmentScore;
-    private double callQuality;
-    private Call call;
+    private OptionalDouble callQuality;
 
     public static SVContig of(final AlignedContig contig, final SVContext variant, final int padding) {
         final AlignmentInterval primary = contig.getAlignments().stream()
@@ -104,14 +92,16 @@ public class SVContig extends ArraySVHaplotype {
         return new SVContig(read.getName(), location, variantId, read.getBases(), AlignmentInterval.decodeList(read.getAttributeAsString(SAMTag.SA.name())), refAln, refScore, altAln, altScore, mappingQuality, qual);
     }
 
-    public void setReferenceAlignment(final List<AlignmentInterval> intervals, final RealignmentScore score) {
+    public void setReferenceHaplotypeAlignment(final List<AlignmentInterval> intervals, final RealignmentScore score) {
         referenceAlignment = intervals;
         referenceAlignmentScore = score;
+        callQuality = OptionalDouble.empty();
     }
 
-    public void setAlternativeAlignment(final List<AlignmentInterval> intervals, final RealignmentScore score) {
+    public void setAlternativeHaplotypeAlignment(final List<AlignmentInterval> intervals, final RealignmentScore score) {
         alternativeAlignment = intervals;
         alternativeAlignmentScore = score;
+        callQuality = OptionalDouble.empty();
     }
 
     public List<AlignmentInterval> geReferenceHaplotypeAlignment() {
@@ -150,19 +140,7 @@ public class SVContig extends ArraySVHaplotype {
         this.alternativeAlignment = altAln;
         this.referenceAlignmentScore = refScore;
         this.alternativeAlignmentScore = altScore;
-        final double refScoreValue = refScore == null ? Double.NaN : refScore.getLog10Prob();
-        final double altScoreValue = refScore == null ? Double.NaN : altScore.getLog10Prob();
-
-        if (refScoreValue < altScoreValue) {
-            this.call = Call.ALT;
-            this.callQuality = qual == null ? altScoreValue - refScoreValue : qual;
-        } else if (altScoreValue < refScoreValue) {
-            this.call = Call.REF;
-            this.callQuality = qual == null ? refScoreValue - altScoreValue : qual;
-        } else {
-            this.call = Call.NOCALL;
-            this.callQuality = qual == null ? 0.0 : qual;
-        }
+        this.callQuality = OptionalDouble.empty();
     }
 
     private SVContig(final Kryo kryo, final Input input) {
@@ -171,8 +149,7 @@ public class SVContig extends ArraySVHaplotype {
         this.alternativeAlignment = Serializer.readAlignment(kryo, input);
         this.referenceAlignmentScore = kryo.readObjectOrNull(input, RealignmentScore.class);
         this.alternativeAlignmentScore = kryo.readObjectOrNull(input, RealignmentScore.class);
-        this.call = Call.valueOf(input.readString());
-        this.callQuality = input.readDouble();
+        this.callQuality = OptionalDouble.empty();
     }
 
     public static class Serializer extends ArraySVHaplotype.Serializer<SVContig> {
@@ -184,8 +161,6 @@ public class SVContig extends ArraySVHaplotype {
             writeAlignment(kryo, output, object.alternativeAlignment);
             kryo.writeObjectOrNull(output, object.referenceAlignmentScore, RealignmentScore.class);
             kryo.writeObjectOrNull(output, object.alternativeAlignmentScore, RealignmentScore.class);
-            output.writeString(object.call.name());
-            output.writeDouble(object.callQuality);
         }
 
         @Override
@@ -216,22 +191,26 @@ public class SVContig extends ArraySVHaplotype {
         }
     }
 
-    public boolean isPerfectReferenceMap() {
-        return referenceAlignment != null && referenceAlignment.size() == 1 && referenceAlignment.get(0).cigarAlong5to3DirectionOfContig.numCigarElements() == 1
-                && referenceAlignment.get(0).cigarAlong5to3DirectionOfContig.getCigarElement(0).getOperator().isAlignment()
-                && referenceAlignment.get(0).cigarAlong5to3DirectionOfContig.getCigarElement(0).getLength() == getLength()
-                && referenceAlignment.get(0).mismatches == 0;
+    private int getMappingQuality() {
+        return getReferenceAlignment().stream().mapToInt(ai -> ai.mapQual).filter(mq -> mq != SAMRecord.UNKNOWN_MAPPING_QUALITY).max().orElse(0);
     }
 
-    public boolean isPerfectAlternativeMap() {
-        return alternativeAlignment != null && alternativeAlignment.size() == 1 && alternativeAlignment.get(0).cigarAlong5to3DirectionOfContig.numCigarElements() == 1
-                && alternativeAlignment.get(0).cigarAlong5to3DirectionOfContig.getCigarElement(0).getOperator().isAlignment()
-                && alternativeAlignment.get(0).cigarAlong5to3DirectionOfContig.getCigarElement(0).getLength() == getLength()
-                && alternativeAlignment.get(0).mismatches == 0;
-    }
-
-    public int getMinimumMappingQuality() {
-        return (int) Math.min(callQuality, geReferenceHaplotypeAlignment().stream().mapToInt(ai -> ai.mapQual).filter(mq -> mq != SAMRecord.UNKNOWN_MAPPING_QUALITY).max().orElse(0));
+    public int getCallQuality() {
+        if (!callQuality.isPresent()) {
+            if (referenceAlignmentScore == null || alternativeAlignmentScore == null) {
+                if (referenceAlignmentScore == alternativeAlignmentScore) {
+                    callQuality = OptionalDouble.of(0);
+                } else {
+                    callQuality = OptionalDouble.of(getMappingQuality());
+                }
+            }
+            final double refScore = getReferenceHaplotypeScore();
+            final double altScore = getAlternativeHaplotypeScore();
+            final double haplotypeQualDiff = Math.abs(refScore - altScore);
+            final double originalMappingQuality = getMappingQuality();
+            callQuality = OptionalDouble.of(Math.min(haplotypeQualDiff, originalMappingQuality));
+        }
+        return (int) Math.round(callQuality.getAsDouble());
     }
 
 }

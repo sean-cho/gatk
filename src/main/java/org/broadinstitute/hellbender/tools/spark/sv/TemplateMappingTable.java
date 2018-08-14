@@ -232,8 +232,8 @@ public class TemplateMappingTable implements Serializable {
             builder.append('\t').append(haplotype.getName());
             if (haplotype.isContig()) {
                 final SVContig contig = (SVContig) haplotype;
-                final double refScore = contig.getReferenceScore();
-                final double altScore = contig.getAlternativeScore();
+                final double refScore = contig.getReferenceHaplotypeScore();
+                final double altScore = contig.getAlternativeHaplotypeScore();
                 final String call = refScore < altScore ? "altHaplotype" : ((altScore < refScore) ? "refHaplotype" : ".");
                 final double qual = call.equals("altHaplotype") ? (altScore - refScore) : (call.equals("refHaplotype") ? refScore - altScore : Double.NaN);
                 builder.append(':').append(call).append(Double.isNaN(qual) ? "" : String.format(":%.2f", qual));

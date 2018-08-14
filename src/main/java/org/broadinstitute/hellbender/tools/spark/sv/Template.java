@@ -13,6 +13,7 @@ import org.broadinstitute.hellbender.utils.MathUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.iterators.ArrayUtils;
+import org.broadinstitute.hellbender.utils.param.ParamUtils;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.read.SAMRecordToGATKReadAdapter;
 
@@ -72,6 +73,16 @@ public class Template implements Serializable {
 
         public byte[] bases() {
             return bases.clone();
+        }
+
+        public void copyBases(final byte[] dest, final int offset, final int from, final int to) {
+            Utils.nonNull(dest);
+            Utils.validate(from <= to, "from cannot be larger than to");
+            final int copyLength = to - from;
+            Utils.validate(copyLength + offset < dest.length, "the copy will go beyond the end of the destination array");
+            Utils.validIndex(offset, dest.length);
+            ParamUtils.isPositiveOrZero(offset, "the destination offset cannot be negative");
+            System.arraycopy(bases, from, dest, offset, copyLength);
         }
 
         public int[] qualities() {

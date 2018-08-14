@@ -78,6 +78,8 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
      */
     private final List<Object2IntMap<GATKRead>> readIndexBySampleIndex;
 
+    private final List<Object2IntMap<String>> readNameIndexBySampleIndex;
+
     /**
      * Index of the reference allele if any, otherwise {@link #MISSING_REF}.
      */
@@ -136,8 +138,10 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
         referenceAlleleIndex = findReferenceAllele(alleles);
 
         readIndexBySampleIndex =  new ArrayList<>(sampleCount);
+        readNameIndexBySampleIndex = new ArrayList<>(sampleCount);
         for (int i = 0; i < sampleCount; i++) {
             readIndexBySampleIndex.add(null);
+            readNameIndexBySampleIndex.add(null);
         }
 
         setupIndexes(reads, sampleCount, alleleCount);
@@ -158,6 +162,10 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
         this.readsBySampleIndex = readsBySampleIndex;
         this.valuesBySampleIndex = values;
         this.readIndexBySampleIndex = readIndex;
+        this.readNameIndexBySampleIndex = new ArrayList<>(readIndex.size());
+        for (int i = 0; i < readIndex.size(); i++) {
+            readNameIndexBySampleIndex.add(null);
+        }
         final int sampleCount = samples.numberOfSamples();
         this.readListBySampleIndex = (List<GATKRead>[])new List[sampleCount];
 
@@ -315,6 +323,14 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
             return readListBySampleIndex[sampleIndex] = Collections.unmodifiableList(Arrays.asList(readsBySampleIndex[sampleIndex]));
         } else {
             return extantList;
+        }
+    }
+
+    public boolean containsRead(final int sampleIndex, final String name) {
+        if (name == null) {
+            return false;
+        } else {
+            return readNameIndexBySampleIndex(sampleIndex).containsKey(name);
         }
     }
 
@@ -476,6 +492,7 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
         for (int s = 0; s < sampleCount; s++) {
             final GATKRead[] sampleReads = readsBySampleIndex[s];
             final Object2IntMap<GATKRead> readIndex = readIndexBySampleIndex.get(s);
+            final Object2IntMap<String> readNameIndex = readNameIndexBySampleIndex.get(s);
             final int sampleReadCount = sampleReads.length;
             for (int r = 0; r < sampleReadCount; r++) {
                 final GATKRead read = sampleReads[r];
@@ -487,6 +504,10 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
                 if (readIndex != null) {
                     readIndex.remove(read);
                     readIndex.put(replacement, r);
+                }
+                if (readNameIndex != null) {
+                    readNameIndex.remove(read.getName());
+                    readNameIndex.put(replacement.getName(), r);
                 }
             }
         }
@@ -1080,6 +1101,15 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
         }
     }
 
+    public int readIndex(final int sampleIndex, final String name) {
+        final Object2IntMap<String> readIndex = readNameIndexBySampleIndex(sampleIndex);
+        if (readIndex.containsKey(name)) {
+            return readIndex.getInt(name);
+        } else {
+            return -1;
+        }
+    }
+
     public String toString() {
         final StringBuilder builder = new StringBuilder(1000);
         builder.append("template");
@@ -1417,6 +1447,18 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
             }
         }
         return readIndexBySampleIndex.get(sampleIndex);
+    }
+
+    private Object2IntMap<String> readNameIndexBySampleIndex(final int sampleIndex) {
+        if (readNameIndexBySampleIndex.get(sampleIndex) == null) {
+            final GATKRead[] sampleReads = readsBySampleIndex[sampleIndex];
+            final int sampleReadCount = sampleReads.length;
+            readNameIndexBySampleIndex.set(sampleIndex, new Object2IntOpenHashMap<>(sampleReadCount));
+            for (int r = 0; r < sampleReadCount; r++) {
+                readNameIndexBySampleIndex.get(sampleIndex).put(sampleReads[r].getName(), r);
+            }
+        }
+        return readNameIndexBySampleIndex.get(sampleIndex);
     }
 
 
