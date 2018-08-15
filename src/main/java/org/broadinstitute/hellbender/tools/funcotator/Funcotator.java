@@ -15,7 +15,6 @@ import org.broadinstitute.hellbender.engine.filters.VariantFilter;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.DataSourceUtils;
-import org.broadinstitute.hellbender.tools.funcotator.dataSources.gencode.GencodeFuncotation;
 import org.broadinstitute.hellbender.tools.funcotator.mafOutput.MafOutputRenderer;
 import org.broadinstitute.hellbender.tools.funcotator.metadata.FuncotationMetadata;
 import org.broadinstitute.hellbender.tools.funcotator.metadata.VcfFuncotationMetadata;
@@ -547,55 +546,7 @@ public class Funcotator extends VariantWalker {
     private void enqueueAndHandleVariant(final VariantContext variant, final ReferenceContext referenceContext, final FeatureContext featureContext) {
 
         //==============================================================================================================
-        // Get our manually-specified feature inputs:
 
-        final Map<String, List<Feature>> featureSourceMap = new HashMap<>();
-
-        for ( final FeatureInput<? extends Feature> featureInput : manualLocatableFeatureInputs ) {
-            @SuppressWarnings("unchecked")
-            final List<Feature> featureList = (List<Feature>)featureContext.getValues(featureInput);
-            featureSourceMap.put( featureInput.getName(), featureList );
-        }
-
-        //==============================================================================================================
-        // First create only the transcript (Gencode) funcotations:
-
-        if (retrieveGencodeFuncotationFactoryStream().count() > 1) {
-            logger.warn("Attempting to annotate with more than one GENCODE datasource.  If these have overlapping transcript IDs, errors may occur.");
-        }
-
-        final List<GencodeFuncotation> transcriptFuncotations = retrieveGencodeFuncotationFactoryStream()
-                .map(gf -> gf.createFuncotations(variant, referenceContext, featureSourceMap))
-                .flatMap(List::stream)
-                .map(gf -> (GencodeFuncotation) gf).collect(Collectors.toList());
-
-        //==============================================================================================================
-        // Create the funcotations for non-Gencode data sources:
-
-        // Create a place to keep our funcotations:
-        final FuncotationMap funcotationMap = FuncotationMap.createFromGencodeFuncotations(transcriptFuncotations);
-
-        // Perform the rest of the annotation.  Note that this code manually excludes the Gencode Funcotations.
-        for (final DataSourceFuncotationFactory funcotationFactory : dataSourceFactories ) {
-
-            // Note that this guarantees that we do not add GencodeFuncotations a second time.
-            if (!funcotationFactory.getType().equals(FuncotatorArgumentDefinitions.DataSourceType.GENCODE)) {
-                final List<String> txIds = funcotationMap.getTranscriptList();
-
-                for (final String txId: txIds) {
-                    funcotationMap.add(txId, funcotationFactory.createFuncotations(variant, referenceContext, featureSourceMap, funcotationMap.getGencodeFuncotations(txId)));
-                }
-            }
-        }
-
-        //==============================================================================================================
-        // Create the funcotations for the input and add to all txID mappings.
-
-        final List<String> txIds = funcotationMap.getTranscriptList();
-
-        for (final String txId: txIds) {
-            funcotationMap.add(txId, FuncotatorUtils.createFuncotations(variant, inputMetadata, FuncotatorConstants.DATASOURCE_NAME_FOR_INPUT_VCFS));
-        }
 
         // At this point there is only one transcript ID in the funcotation map if canonical or best effect are selected
         outputRenderer.write(variant, funcotationMap);
@@ -654,7 +605,7 @@ public class Funcotator extends VariantWalker {
                 case COSMIC:
                     break;
                 default:
-                    throw new GATKException("Non-locatable type of DataSourceFuncotationFactory encountered: " + stringType );
+                    throw new GATKException("Unknown type of DataSourceFuncotationFactory encountered: " + stringType );
             }
         }
     }
