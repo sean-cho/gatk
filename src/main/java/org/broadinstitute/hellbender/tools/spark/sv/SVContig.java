@@ -81,12 +81,12 @@ public class SVContig extends ArraySVHaplotype {
     }
 
     public static SVContig of(final GATKRead read, final RealignmentScoreParameters scoreParameters) {
-        final Double qual = read.getAttributeAsDouble(ComposeStructuralVariantHaplotypesSpark.HAPLOTYPE_QUAL_TAG);
-        final String variantId = getMandatoryAttribute(read, ComposeStructuralVariantHaplotypesSpark.VARIANT_CONTEXT_TAG);
-        final List<AlignmentInterval> refAln = getAlignmentIntervalsAttribute(read, ComposeStructuralVariantHaplotypesSpark.REFERENCE_ALIGNMENT_TAG);
-        final List<AlignmentInterval> altAln = getAlignmentIntervalsAttribute(read, ComposeStructuralVariantHaplotypesSpark.ALTERNATIVE_ALIGNMENT_TAG);
-        final RealignmentScore refScore = getOptionalAlignmentScore(read, ComposeStructuralVariantHaplotypesSpark.REFERENCE_SCORE_TAG, scoreParameters);
-        final RealignmentScore altScore = getOptionalAlignmentScore(read, ComposeStructuralVariantHaplotypesSpark.ALTERNATIVE_SCORE_TAG, scoreParameters);
+        final Double qual = read.getAttributeAsDouble(GenotypeStructuralVariantsSpark.HAPLOTYPE_QUAL_TAG);
+        final String variantId = getMandatoryAttribute(read, GenotypeStructuralVariantsSpark.VARIANT_CONTEXT_TAG);
+        final List<AlignmentInterval> refAln = getAlignmentIntervalsAttribute(read, GenotypeStructuralVariantsSpark.REFERENCE_ALIGNMENT_TAG);
+        final List<AlignmentInterval> altAln = getAlignmentIntervalsAttribute(read, GenotypeStructuralVariantsSpark.ALTERNATIVE_ALIGNMENT_TAG);
+        final RealignmentScore refScore = getOptionalAlignmentScore(read, GenotypeStructuralVariantsSpark.REFERENCE_SCORE_TAG, scoreParameters);
+        final RealignmentScore altScore = getOptionalAlignmentScore(read, GenotypeStructuralVariantsSpark.ALTERNATIVE_SCORE_TAG, scoreParameters);
         final SimpleInterval location = new SimpleInterval(read.getAssignedContig(), read.getAssignedStart(), read.getAssignedStart());
         final int mappingQuality = read.getMappingQuality();
         return new SVContig(read.getName(), location, variantId, read.getBases(), AlignmentInterval.decodeList(read.getAttributeAsString(SAMTag.SA.name())), refAln, refScore, altAln, altScore, mappingQuality, qual);
