@@ -15,8 +15,8 @@ import org.broadinstitute.hellbender.engine.filters.VariantFilter;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.DataSourceUtils;
+import org.broadinstitute.hellbender.tools.funcotator.engine.FuncotationEngine;
 import org.broadinstitute.hellbender.tools.funcotator.mafOutput.MafOutputRenderer;
-import org.broadinstitute.hellbender.tools.funcotator.metadata.FuncotationMetadata;
 import org.broadinstitute.hellbender.tools.funcotator.metadata.VcfFuncotationMetadata;
 import org.broadinstitute.hellbender.tools.funcotator.vcfOutput.VcfOutputRenderer;
 import org.broadinstitute.hellbender.transformers.VariantTransformer;
@@ -34,7 +34,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Funcotator (FUNCtional annOTATOR) analyzes given variants for their function (as retrieved from a set of data sources) and produces the analysis in a specified output file.
@@ -304,9 +303,10 @@ public class Funcotator extends VariantWalker {
     //==================================================================================================================
 
     private OutputRenderer outputRenderer;
-    private final List<DataSourceFuncotationFactory> dataSourceFactories = new ArrayList<>();
 
     private final List<FeatureInput<? extends Feature>> manualLocatableFeatureInputs = new ArrayList<>();
+
+    private FuncotationEngine funcotationEngine;
 
     /**
      * Whether the input variant contigs must be converted to hg19.
@@ -315,7 +315,6 @@ public class Funcotator extends VariantWalker {
      */
     private boolean mustConvertInputContigsToHg19 = false;
 
-    private FuncotationMetadata inputMetadata;
 
     //==================================================================================================================
 
@@ -348,25 +347,21 @@ public class Funcotator extends VariantWalker {
         dataSourceDirectories.sort(Comparator.naturalOrder());
         final Map<Path, Properties> configData = DataSourceUtils.getAndValidateDataSourcesFromPaths(referenceVersion, dataSourceDirectories);
         initializeManualFeaturesForLocatableDataSources(configData);
-        dataSourceFactories.addAll(
-                DataSourceUtils.createDataSourceFuncotationFactoriesForDataSources(configData, annotationOverridesMap, transcriptSelectionMode, userTranscriptIdSet)
-        );
 
-        // Sort our data source factories to ensure they're always in the same order:  gencode datasources first
-        dataSourceFactories.sort(DataSourceUtils::datasourceComparator);
 
         // Create the metadata directly from the input.
-        inputMetadata = VcfFuncotationMetadata.create(new ArrayList<>(getHeaderForVariants().getInfoHeaderLines()));
+        funcotationEngine = new FuncotationEngine(VcfFuncotationMetadata.create(new ArrayList<>(getHeaderForVariants().getInfoHeaderLines())),
+                DataSourceUtils.createDataSourceFuncotationFactoriesForDataSources(configData, annotationOverridesMap, transcriptSelectionMode, userTranscriptIdSet));
 
         // Determine which annotations are accounted for (by the funcotation factories) and which are not.
-        final LinkedHashMap<String, String> unaccountedForDefaultAnnotations = getUnaccountedForAnnotations( dataSourceFactories, annotationDefaultsMap );
-        final LinkedHashMap<String, String> unaccountedForOverrideAnnotations = getUnaccountedForAnnotations( dataSourceFactories, annotationOverridesMap );
+        final LinkedHashMap<String, String> unaccountedForDefaultAnnotations = getUnaccountedForAnnotations( funcotationEngine.getDataSourceFactories(), annotationDefaultsMap );
+        final LinkedHashMap<String, String> unaccountedForOverrideAnnotations = getUnaccountedForAnnotations( funcotationEngine.getDataSourceFactories(), annotationOverridesMap );
 
         // Set up our output renderer:
         switch (outputFormatType) {
             case MAF:
                 outputRenderer = new MafOutputRenderer(outputFile.toPath(),
-                        dataSourceFactories,
+                        funcotationEngine.getDataSourceFactories(),
                         getHeaderForVariants(),
                         unaccountedForDefaultAnnotations,
                         unaccountedForOverrideAnnotations,
@@ -374,7 +369,7 @@ public class Funcotator extends VariantWalker {
                 break;
             case VCF:
                 outputRenderer = new VcfOutputRenderer(createVCFWriter(outputFile),
-                        dataSourceFactories,
+                        funcotationEngine.getDataSourceFactories(),
                         getHeaderForVariants(),
                         unaccountedForDefaultAnnotations,
                         unaccountedForOverrideAnnotations,
@@ -495,16 +490,13 @@ public class Funcotator extends VariantWalker {
 
     @Override
     public void closeTool() {
-
-        for ( final DataSourceFuncotationFactory factory : dataSourceFactories ) {
-            if ( factory != null ) {
-                factory.close();
-            }
+        if (funcotationEngine != null) {
+            funcotationEngine.close();
         }
+
         if ( outputRenderer != null ) {
             outputRenderer.close();
         }
-
     }
 
     //==================================================================================================================
@@ -547,15 +539,23 @@ public class Funcotator extends VariantWalker {
 
         //==============================================================================================================
 
+        // Get our manually-specified feature inputs:
+
+        // TODO: Can I get rid of the featureSourceMap?
+        final Map<String, List<Feature>> featureSourceMap = new HashMap<>();
+
+        for ( final FeatureInput<? extends Feature> featureInput : manualLocatableFeatureInputs ) {
+            @SuppressWarnings("unchecked")
+            final List<Feature> featureList = (List<Feature>)featureContext.getValues(featureInput);
+            featureSourceMap.put( featureInput.getName(), featureList );
+        }
+
+        final FuncotationMap funcotationMap = funcotationEngine.createFuncotationMapForVariant(variant, referenceContext, featureSourceMap);
 
         // At this point there is only one transcript ID in the funcotation map if canonical or best effect are selected
         outputRenderer.write(variant, funcotationMap);
     }
 
-    private Stream<DataSourceFuncotationFactory> retrieveGencodeFuncotationFactoryStream() {
-        return dataSourceFactories.stream()
-                .filter(f -> f.getType().equals(FuncotatorArgumentDefinitions.DataSourceType.GENCODE));
-    }
 
     /**
      * Split each element of the given {@link List} into a key and value.
@@ -590,15 +590,15 @@ public class Funcotator extends VariantWalker {
             switch ( FuncotatorArgumentDefinitions.DataSourceType.getEnum(stringType) ) {
                 case LOCATABLE_XSV:
                     // Add our features manually so we can match over them:
-                    addFeaturesForLocatableDataSource(entry.getKey(), entry.getValue(), XsvTableFeature.class);
+                    manualLocatableFeatureInputs.add(createFeatureInputForLocatableDataSource(entry.getKey(), entry.getValue(), XsvTableFeature.class));
                     break;
                 case GENCODE:
                     // Add our features manually so we can match over them:
-                    addFeaturesForLocatableDataSource(entry.getKey(), entry.getValue(), GencodeGtfFeature.class);
+                    manualLocatableFeatureInputs.add(createFeatureInputForLocatableDataSource(entry.getKey(), entry.getValue(), GencodeGtfFeature.class));
                     break;
                 case VCF:
                     // Add our features manually so we can match over them:
-                    addFeaturesForLocatableDataSource(entry.getKey(), entry.getValue(), VariantContext.class);
+                    manualLocatableFeatureInputs.add(createFeatureInputForLocatableDataSource(entry.getKey(), entry.getValue(), VariantContext.class));
                     break;
                 // Non-locatable data source types go here:
                 case SIMPLE_XSV:
@@ -610,9 +610,9 @@ public class Funcotator extends VariantWalker {
         }
     }
 
-    private void addFeaturesForLocatableDataSource(final Path dataSourceFile,
-                                                   final Properties dataSourceProperties,
-                                                   final Class<? extends Feature> featureClazz) {
+    private FeatureInput<? extends Feature> createFeatureInputForLocatableDataSource(final Path dataSourceFile,
+                                                          final Properties dataSourceProperties,
+                                                          final Class<? extends Feature> featureClazz) {
 
         final String name = dataSourceProperties.getProperty(DataSourceUtils.CONFIG_FILE_FIELD_NAME_NAME);
 
@@ -624,8 +624,7 @@ public class Funcotator extends VariantWalker {
                 name,
                 featureClazz, lookaheadFeatureCachingInBp);
 
-        // Add our feature input to our list of manual inputs:
-        manualLocatableFeatureInputs.add(featureInput);
+        return featureInput;
     }
 
     /**
