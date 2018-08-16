@@ -67,7 +67,7 @@ public final class ReadLikelihoodsUnitTest {
         final double[][][] expectedSum = new double[sampleList.numberOfSamples()][alleleList.numberOfAlleles()][];
         final Random rdn = new Random(1313 + Arrays.hashCode(samples) + Arrays.hashCode(alleles) + Integer.hashCode(numberOfLks));
         @SuppressWarnings("unchecked")
-        final ReadLikelihoods<Allele>[] lks = (ReadLikelihoods<Allele>[]) new ReadLikelihoods[numberOfLks];
+        final List<ReadLikelihoods<Allele>> lks = new ArrayList<>(numberOfLks);
         for (int s = 0; s < sampleList.numberOfSamples(); s++) {
             for (int a = 0; a < alleleList.numberOfAlleles(); a++) {
                 final int numberOfReads = reads.get(sampleList.getSample(s)).size();
@@ -99,9 +99,9 @@ public final class ReadLikelihoodsUnitTest {
                     }
                 }
             }
-            lks[l] = lk;
+            lks.add(lk);
         }
-        final ReadLikelihoods<Allele> result = ReadLikelihoods.sum(Arrays.asList(lks));
+        final ReadLikelihoods<Allele> result = ReadLikelihoods.sum(lks);
         Assert.assertTrue(AlleleList.equals(alleleList, result.alleles));
         Assert.assertTrue(SampleList.equals(sampleList, result.samples));
         for (int s = 0; s < result.samples.numberOfSamples(); s++) {
@@ -804,7 +804,7 @@ public final class ReadLikelihoodsUnitTest {
     }
 
     private SAMFileHeader SAM_HEADER = ArtificialReadUtils.createArtificialSamHeader(10, 0, 1000);
-    final GenomeLocParser locParser = new GenomeLocParser(SAM_HEADER.getSequenceDictionary());
+    final GenomeLocParser   locParser = new GenomeLocParser(SAM_HEADER.getSequenceDictionary());
 
 
     private int[][] READ_COUNTS = {

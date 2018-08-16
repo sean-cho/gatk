@@ -1120,7 +1120,7 @@ public class ReadLikelihoods<A extends Allele> implements SampleList, AlleleList
             for (final GATKRead read : readsBySampleIndex[s]) {
                 final int templateIndex = readIndex(s, read);
                 builder.append('\n').append(read.getName());
-                final BestAllele best = searchBestAllele(s, templateIndex, true);
+                final BestAllele best = searchBestAllele(s, templateIndex, true, false);
                 builder.append('\t').append(best.allele.getDisplayString())
                         .append('\t').append(String.format("%.2f", best.confidence));
 

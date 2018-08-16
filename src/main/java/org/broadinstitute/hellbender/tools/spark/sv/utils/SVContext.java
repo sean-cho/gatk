@@ -294,7 +294,7 @@ public final class SVContext extends VariantContext {
         }
     }
 
-    private SVHaplotype composeShort33InversionHaplotype(ReferenceBases startReferenceBases, ReferenceBases endReferenceBases, byte[] insertedBases, int insertedBasesLength) {
+    private SVHaplotype composeShort33InversionHaplotype(final ReferenceBases startReferenceBases, final ReferenceBases endReferenceBases, final byte[] insertedBases, final int insertedBasesLength) {
         final ReferenceBases allReferenceBases = ReferenceBases.union(startReferenceBases, endReferenceBases);
         final SequenceBuilder sequence = new SequenceBuilder(insertedBasesLength + allReferenceBases.getInterval().size());
         sequence.append(allReferenceBases, allReferenceBases.getInterval().getStart(), getStart() - 1, false);
@@ -308,8 +308,8 @@ public final class SVContext extends VariantContext {
         sequence.append(allReferenceBases, getEnd(), allReferenceBases.getInterval().getEnd(), false);
         final AlignmentInterval firstInterval = new AlignmentInterval(
                 new SimpleInterval(getContig(), allReferenceBases.getInterval().getStart(), getStart() - 1),
-                1, insertOffset,
-                new Cigar(Arrays.asList(new CigarElement(insertOffset, CigarOperator.M),
+                1, inversionOffset,
+                new Cigar(Arrays.asList(new CigarElement(inversionOffset, CigarOperator.M),
                         new CigarElement(sequence.getLength() - insertOffset, CigarOperator.S))), true,
                 SAMRecord.UNKNOWN_MAPPING_QUALITY, AlignmentInterval.NO_AS, AlignmentInterval.NO_NM, ContigAlignmentsModifier.AlnModType.NONE);
         final AlignmentInterval inversionInterval = new AlignmentInterval(

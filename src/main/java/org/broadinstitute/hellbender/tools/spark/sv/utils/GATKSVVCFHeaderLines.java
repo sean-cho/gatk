@@ -271,7 +271,6 @@ public final class GATKSVVCFHeaderLines {
 
     /**
      * Returns a list with the header entries for SV genotyping specifically.
-     * @param header
      * @param includePerformanceStats whether to include annotation with respect the size of the
      *                                problem and time that took to genotype.
      * @param includeStratifiedLikelihoods whether to include stratified likelihoods.
@@ -283,6 +282,13 @@ public final class GATKSVVCFHeaderLines {
                                                                   final boolean includeStratifiedLikelihoods,
                                                                   final boolean includeStratifiedAlleleDepth) {
         final List<VCFHeaderLine> result = new ArrayList<>(20);
+        // Standard Genotyping annotations:
+        result.add(VCFStandardHeaderLines.getFormatLine(VCFConstants.GENOTYPE_KEY));
+        result.add(VCFStandardHeaderLines.getFormatLine(VCFConstants.DEPTH_KEY));
+        result.add(VCFStandardHeaderLines.getFormatLine(VCFConstants.GENOTYPE_ALLELE_DEPTHS));
+        result.add(VCFStandardHeaderLines.getFormatLine(VCFConstants.GENOTYPE_PL_KEY));
+        result.add(VCFStandardHeaderLines.getFormatLine(VCFConstants.GENOTYPE_QUALITY_KEY));
+        // SV specific/optional ones:
         if (includePerformanceStats) {
             result.add(new VCFInfoHeaderLine(GATKSVVCFConstants.TEMPLATE_COUNT, 1, VCFHeaderLineType.Integer, "Number of templates used to genotype this variant"));
             result.add(new VCFInfoHeaderLine(GATKSVVCFConstants.HAPLOTYPE_COUNT, 1, VCFHeaderLineType.Integer, "Number of haplotypes/contigs used to genotype this variant"));

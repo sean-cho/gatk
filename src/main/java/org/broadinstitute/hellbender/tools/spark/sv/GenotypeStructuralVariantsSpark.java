@@ -386,7 +386,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         final String referenceFilePath = referenceArguments.getReferenceFileName();
 
 
-        final List<SimpleInterval> intervals = hasIntervals() ? getIntervals()
+        final List<SimpleInterval> intervals = this.hasUserSuppliedIntervals() ? getIntervals()
                 : IntervalUtils.getAllIntervalsForReference(dictionary);
 
         final TraversalParameters contigAlignmentsTraversalParameters = composeContigTraversalParameters(ctx, contigsSource,
@@ -1182,7 +1182,7 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                                             final boolean emitStratifiedAlleleDepths,
                                             final boolean emitStratifiedLikelihoods) {
         totalLikelihoods.removeUniformativeReads(0.0);
-        totalLikelihoods.normalizeLikelihoods(true, -0.1 * penalties.maximumLikelihoodDifferencePerTemplate);
+        totalLikelihoods.normalizeLikelihoods(-0.1 * penalties.maximumLikelihoodDifferencePerTemplate);
         final GenotypeLikelihoods likelihoods = genotypeCalculator.genotypeLikelihoods(totalLikelihoods.sampleMatrix(0));
         final int pl[] = likelihoods.getAsPLs();
         final int ad[] = calculateAD(totalLikelihoods, informativePhredLikelihoodDifferenceThreshold);
@@ -1608,8 +1608,8 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
             case INS:
             case DEL:
             case DUP:
-            case INV:
                 return true;
+            //case INV:
                 //return !ctx.hasAttribute(GATKSVVCFConstants.IMPRECISE);
             default:
                 return false;

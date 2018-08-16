@@ -6,13 +6,10 @@ import com.google.common.collect.Iterators;
 import com.google.common.primitives.Ints;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.tribble.util.ParsingUtils;
-<<<<<<< HEAD
 import htsjdk.variant.variantcontext.VariantContext;
-=======
 import java.io.FileNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;
->>>>>>> 7a5d707... Test 01
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.math3.random.RandomDataGenerator;

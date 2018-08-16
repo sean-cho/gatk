@@ -63,7 +63,7 @@ public class AltSiteRecord {
     public AltSiteRecord getReverseComplementOfRecord(){
         Utils.validate(!F1R2FilterConstants.CANONICAL_KMERS.contains(referenceContext), "for consistency, don't make the " +
                         "revcomp record of a canonical reference context");
-        final Nucleotide revCompOfAlt = Nucleotide.complement(altAllele.toBase());
+        final Nucleotide revCompOfAlt = altAllele.complement();
         final int newRefF1R2 = refCount - refF1R2;
         final int newAltF1R2 = altCount - altF1R2;
         return new AltSiteRecord(SequenceUtil.reverseComplement(referenceContext), refCount, altCount, newRefF1R2,
@@ -130,7 +130,7 @@ public class AltSiteRecord {
             final int refF1R2 = Integer.parseInt(dataLine.get(AltSiteRecordTableColumn.REF_F1R2));
             final int altF1R2 = Integer.parseInt(dataLine.get(AltSiteRecordTableColumn.ALT_F1R2));
             final int depth = Integer.parseInt(dataLine.get(AltSiteRecordTableColumn.DEPTH));
-            final Nucleotide altAllele = Nucleotide.valueOf(dataLine.get(AltSiteRecordTableColumn.ALT_BASE));
+            final Nucleotide altAllele = Nucleotide.decode((byte) dataLine.get(AltSiteRecordTableColumn.ALT_BASE).charAt(0));
             return new AltSiteRecord(referenceContext, refCount, altCount, refF1R2, altF1R2, altAllele);
         }
     }
