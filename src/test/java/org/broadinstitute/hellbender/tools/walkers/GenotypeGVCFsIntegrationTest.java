@@ -100,8 +100,13 @@ public class GenotypeGVCFsIntegrationTest extends CommandLineProgramTest {
                 {getTestFile( "testAlleleSpecificAnnotations.CombineGVCF.output.g.vcf"), getTestFile( "testAlleleSpecificAnnotations.CombineGVCF.expected.g.vcf"), Arrays.asList( "-A", "ClippingRankSumTest", "-G", "AS_StandardAnnotation", "-G", "StandardAnnotation"), b37_reference_20_21},
                 //all sites not supported yet see https://github.com/broadinstitute/gatk-protected/issues/580 and  https://github.com/broadinstitute/gatk/issues/2429
                 //{getTestFile(basePairGVCF), getTestFile( "gvcf.basepairResolution.includeNonVariantSites.gatk3.7_30_ga4f720357.expected.vcf"), Collections.singletonList("--"+GenotypeGVCFs.ALL_SITES_LONG_NAME) //allsites not supported yet
-                //Test for new RAW_MQandDP annotation format
-                {NA12878_HG37, getTestFile("newMQcalc.combined.genotyped.vcf"), NO_EXTRA_ARGS, b37_reference_20_21},
+        };
+    }
+
+    @DataProvider(name = "gvcfWithNewMQFormat")
+    public Object[][] gvcfWithNewMQFormat() {
+        return new Object[][]{
+                {NA12878_HG37, getTestFile("newMQcalc.combined.genotyped.vcf"), NO_EXTRA_ARGS, b37_reference_20_21}
         };
     }
 
@@ -199,6 +204,7 @@ public class GenotypeGVCFsIntegrationTest extends CommandLineProgramTest {
         final String genomicsDBUri = GenomicsDBTestUtils.makeGenomicsDBUri(tempGenomicsDB);
 
         //FIXME: copy in the extra files until Protobuf update in PR #4645 is ready
+        //this updated json specifies the combine operation for the new RAW_MQandDP key; behavior for old version is hard-coded into GDB
         Runtime.getRuntime().exec("cp " + getTestFile("vidmap.updated.json").getAbsolutePath() +" "+ tempGenomicsDB.getAbsolutePath() + "/vidmap.json");
 
         runGenotypeGVCFSAndAssertSomething(genomicsDBUri, expected, NO_EXTRA_ARGS, VariantContextTestUtils::assertVariantContextsHaveSameGenotypes, reference);
@@ -228,6 +234,15 @@ public class GenotypeGVCFsIntegrationTest extends CommandLineProgramTest {
         runGenotypeGVCFSAndAssertSomething(input, expected, extraArgs, VariantContextTestUtils::assertGenotypePosteriorsAttributeWasRemoved, reference);
     }
 
+    @Test(dataProvider = "gvcfWithNewMQFormat")
+    public void assertNewMQWorks(File input, File expected, List<String> extraArgs, String reference) throws IOException {
+        final List<String> attributesWithJitter = Arrays.asList(
+                "AS_QD",
+                "QD",//TODO QD and AS_QD have cap values and anything that reaches that is randomized.  It's difficult to reproduce the same random numbers across gatk3 -> 4
+                "FS");//TODO There's some bug in either gatk3 or gatk4 fisherstrand that's making them not agree still, I'm not sure which is correct
+        final VCFHeader header = VCFHeaderReader.readHeaderFrom(new SeekablePathStream(IOUtils.getPath(expected.getAbsolutePath())));
+        runGenotypeGVCFSAndAssertSomething(input, expected, extraArgs, (a, e) -> VariantContextTestUtils.assertVariantContextsAreEqualAlleleOrderIndependent(a, e, attributesWithJitter, header), reference);
+    }
 
     private void runGenotypeGVCFSAndAssertSomething(File input, File expected, List<String> additionalArguments, BiConsumer<VariantContext, VariantContext> assertion, String reference) throws IOException {
         runGenotypeGVCFSAndAssertSomething(input.getAbsolutePath(), expected, additionalArguments, assertion, reference

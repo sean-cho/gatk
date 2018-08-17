@@ -8,6 +8,8 @@ import htsjdk.variant.variantcontext.VariantContextBuilder;
 import htsjdk.variant.vcf.VCFConstants;
 import htsjdk.variant.vcf.VCFInfoHeaderLine;
 import htsjdk.variant.vcf.VCFStandardHeaderLines;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.engine.ReferenceContext;
 import org.broadinstitute.hellbender.exceptions.UserException;
@@ -17,6 +19,7 @@ import org.broadinstitute.hellbender.utils.QualityUtils;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.genotyper.ReadLikelihoods;
 import org.broadinstitute.hellbender.utils.help.HelpConstants;
+import org.broadinstitute.hellbender.utils.logging.OneShotLogger;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFConstants;
 import org.broadinstitute.hellbender.utils.variant.GATKVCFHeaderLines;
@@ -30,6 +33,8 @@ import java.util.stream.IntStream;
  *
  * <p>This annotation provides an estimation of the overall mapping quality of reads supporting a variant call, averaged over all samples in a cohort.</p>
  *
+ * <p>The raw data format for this annotation consists of a list of two entries: the sum of the squared mapping qualities and the number of reads across variant (not homRef) genotypes</p>
+ *
  * <h3>Statistical notes</h3>
  * <p>The root mean square is equivalent to the mean of the mapping qualities plus the standard deviation of the mapping qualities.</p>
  *
@@ -41,6 +46,7 @@ import java.util.stream.IntStream;
  */
 @DocumentedFeature(groupName=HelpConstants.DOC_CAT_ANNOTATORS, groupSummary=HelpConstants.DOC_CAT_ANNOTATORS_SUMMARY, summary="Root mean square of the mapping quality of reads across all samples (MQ)")
 public final class RMSMappingQuality extends InfoFieldAnnotation implements StandardAnnotation, ReducibleAnnotation {
+    private static final OneShotLogger logger = new OneShotLogger(RMSMappingQuality.class);
     private static final RMSMappingQuality instance = new RMSMappingQuality();
     public static final int NUM_LIST_ENTRIES = 2;
     public static final int SUM_OF_SQUARES_INDEX = 0;
@@ -48,6 +54,8 @@ public final class RMSMappingQuality extends InfoFieldAnnotation implements Stan
 
     @Override
     public String getRawKeyName() { return GATKVCFConstants.RAW_MAPPING_QUALITY_WITH_DEPTH_KEY;}   //new key for the two-value MQ data to prevent version mismatch catastrophes
+
+    public String getDeprecatedRawKeyName() { return GATKVCFConstants.RAW_RMS_MAPPING_QUALITY_KEY;}   //new key for the two-value MQ data to prevent version mismatch catastrophes
 
     @Override
     public List<String> getKeyNames() {
@@ -107,16 +115,41 @@ public final class RMSMappingQuality extends InfoFieldAnnotation implements Stan
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})//FIXME generics here blow up
     public Map<String, Object> finalizeRawData(final VariantContext vc, final VariantContext originalVC) {
-        if (!vc.hasAttribute(getRawKeyName()))
+        String rawMQdata;
+        if (vc.hasAttribute(getRawKeyName())) {
+            rawMQdata = vc.getAttributeAsString(getRawKeyName(), null);
+        }
+        else if (vc.hasAttribute(getDeprecatedRawKeyName())) {
+            rawMQdata = vc.getAttributeAsString(getDeprecatedRawKeyName(), null);
+            //the original version of ReblockGVCF produces a different MQ format -- try to handle that gracefully here just in case those files go through GenotypeGVCFs
+            if (vc.hasAttribute("MQ_DP")) {
+                logger.warn("Presence of MQ_DP key indicates that this tool may be running on an older output of ReblockGVCF " +
+                        "that may not have compatible annotations with this GATK version. Attempting to reformat MQ data.");
+                final String rawMQdepth = vc.getAttributeAsString("MQ_DP",null);
+                if (rawMQdepth == null) {
+                    throw new UserException.BadInput("MQ annotation data is not properly formatted. This version expects an " +
+                            "int tuple of sum of squared MQ values and total reads over variant genotypes.");
+                }
+                rawMQdata += "," + rawMQdata;
+            }
+            else {
+                logger.warn("MQ annotation data is not properly formatted and will be dropped. This GATK version expects key "
+                        + getRawKeyName() + " with an int tuple of sum of squared MQ values and total reads over variant "
+                        + "genotypes as the value. To process this input, use the version of GATK with which it was created.");
+                return new HashMap<>();
+            }
+        }
+        else {
             return new HashMap<>();
-        String rawMQdata = vc.getAttributeAsString(getRawKeyName(),null);
-        if (rawMQdata == null)
+        }
+        if (rawMQdata == null) {
             return new HashMap<>();
+        }
 
         ReducibleAnnotationData<List<Integer>> myData = new ReducibleAnnotationData(rawMQdata);
         parseRawDataString(myData);
 
-        String annotationString = makeFinalizedAnnotationString(myData.getAttribute(Allele.NO_CALL).get(TOTAL_DEPTH_INDEX), myData.getAttribute(Allele.NO_CALL).get(SUM_OF_SQUARES_INDEX));
+        final String annotationString = makeFinalizedAnnotationString(myData.getAttribute(Allele.NO_CALL).get(TOTAL_DEPTH_INDEX), myData.getAttribute(Allele.NO_CALL).get(SUM_OF_SQUARES_INDEX));
         return Collections.singletonMap(getKeyNames().get(0), annotationString);
     }
 
@@ -125,6 +158,12 @@ public final class RMSMappingQuality extends InfoFieldAnnotation implements Stan
     }
 
 
+    /**
+     * Combine the int tuples: sum of squared mapping quality and read counts over variant genotypes
+     * Since this is not an allele-specific annotation, store the result with the NO_CALL allele key.
+     * @param toAdd new data
+     * @param combined passed in as previous data, modified to store the combined result
+     */
     public void combineAttributeMap(ReducibleAnnotationData<List<Integer>> toAdd, ReducibleAnnotationData<List<Integer>> combined) {
         if (combined.getAttribute(Allele.NO_CALL) != null) {
             combined.putAttribute(Allele.NO_CALL, Arrays.asList(combined.getAttribute(Allele.NO_CALL).get(0) + toAdd.getAttribute(Allele.NO_CALL).get(0),
@@ -138,7 +177,7 @@ public final class RMSMappingQuality extends InfoFieldAnnotation implements Stan
     public void calculateRawData(final VariantContext vc,
                                  final ReadLikelihoods<Allele> likelihoods,
                                  final ReducibleAnnotationData rawAnnotations){
-        //GATK3.5 had a double, but change this to an int for the tuple representation
+        //GATK3.5 had a double, but change this to an int for the tuple representation (square sum, read count)
         int squareSum = 0;
         int numReadsUsed = 0;
         for (int i = 0; i < likelihoods.numberOfSamples(); i++) {
@@ -177,6 +216,7 @@ public final class RMSMappingQuality extends InfoFieldAnnotation implements Stan
 
     /**
      * converts {@link GATKVCFConstants#RAW_MAPPING_QUALITY_WITH_DEPTH_KEY} into  {@link VCFConstants#RMS_MAPPING_QUALITY_KEY}  annotation if present
+     * NOTE: this is currently only used by HaplotypeCaller in VCF mode
      * @param vc which potentially contains rawMQ
      * @return if vc contained {@link GATKVCFConstants#RAW_MAPPING_QUALITY_WITH_DEPTH_KEY} it will be replaced with {@link VCFConstants#RMS_MAPPING_QUALITY_KEY}
      * otherwise return the original vc
@@ -218,9 +258,10 @@ public final class RMSMappingQuality extends InfoFieldAnnotation implements Stan
 
     /**
      *
-     * @return the number of reads at the given site, calculated as InfoField {@link VCFConstants#DEPTH_KEY} minus the
+     * @return the number of reads at the given site, trying first {@Link GATKVCFConstants.RAW_MAPPING_QUALITY_WITH_DEPTH_KEY},
+     * falling back to calculating the value as InfoField {@link VCFConstants#DEPTH_KEY} minus the
      * format field {@link GATKVCFConstants#MIN_DP_FORMAT_KEY} or DP of each of the HomRef genotypes at that site.
-     * Will fall back to calculating the reads from the stratifiedContexts then AlleleLikelyhoods data if provided.
+     * If neither of those is possible, will fall back to calculating the reads from the ReadLikelihoods data if provided.
      * @throws UserException.BadInput if the {@link VCFConstants#DEPTH_KEY} is missing or if the calculated depth is <= 0
      */
     @VisibleForTesting
