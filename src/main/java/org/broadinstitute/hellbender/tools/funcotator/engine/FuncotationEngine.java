@@ -10,6 +10,7 @@ import org.broadinstitute.hellbender.tools.funcotator.dataSources.DataSourceUtil
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.gencode.GencodeFuncotation;
 import org.broadinstitute.hellbender.tools.funcotator.metadata.FuncotationMetadata;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -37,9 +38,9 @@ public class FuncotationEngine {
      *
      * @param variant          {@link VariantContext} to annotate.
      * @param referenceContext {@link ReferenceContext} corresponding to the given {@code variant}.
-     * @param featureSourceMap {@link Map} of {@link String} -> ({@link List} of {@link Feature}) (Data source name -> feature list) containing all overlapping features from the datasource.
+     * @param featureSourceMapForLocatableDatasources {@link Map} of {@link String} -> ({@link List} of {@link Feature}) (Data source name -> feature list) containing all overlapping features from the datasource.
      */
-    public FuncotationMap createFuncotationMapForVariant(final VariantContext variant, final ReferenceContext referenceContext, final Map<String, List<Feature>> featureSourceMap) {
+    public FuncotationMap createFuncotationMapForVariant(final VariantContext variant, final ReferenceContext referenceContext, final Map<String, List<Feature>> featureSourceMapForLocatableDatasources) {
 
         //==============================================================================================================
         // First create only the transcript (Gencode) funcotations:
@@ -49,7 +50,9 @@ public class FuncotationEngine {
         }
 
         final List<GencodeFuncotation> transcriptFuncotations = retrieveGencodeFuncotationFactoryStream()
-                .map(gf -> gf.createFuncotations(variant, referenceContext, featureSourceMap))
+
+                // If the feature source map does not have an entry for the funcotation factory, this indicates that the funcotation factory is not locatable.
+                .map(gf -> gf.createFuncotations(variant, referenceContext, featureSourceMapForLocatableDatasources.getOrDefault(gf.getName(), Collections.emptyList())))
                 .flatMap(List::stream)
                 .map(gf -> (GencodeFuncotation) gf).collect(Collectors.toList());
 
@@ -67,7 +70,9 @@ public class FuncotationEngine {
                 final List<String> txIds = funcotationMap.getTranscriptList();
 
                 for (final String txId: txIds) {
-                    funcotationMap.add(txId, funcotationFactory.createFuncotations(variant, referenceContext, featureSourceMap, funcotationMap.getGencodeFuncotations(txId)));
+
+                    // If the feature source map does not have an entry for the funcotation factory, this indicates that the funcotation factory is not locatable.
+                    funcotationMap.add(txId, funcotationFactory.createFuncotations(variant, referenceContext, featureSourceMapForLocatableDatasources.getOrDefault(funcotationFactory.getName(), Collections.emptyList()), funcotationMap.getGencodeFuncotations(txId)));
                 }
             }
         }
@@ -96,5 +101,4 @@ public class FuncotationEngine {
         return dataSourceFactories.stream()
                 .filter(f -> f.getType().equals(FuncotatorArgumentDefinitions.DataSourceType.GENCODE));
     }
-
 }

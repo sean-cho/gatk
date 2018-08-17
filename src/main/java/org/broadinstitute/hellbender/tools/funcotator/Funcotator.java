@@ -304,7 +304,7 @@ public class Funcotator extends VariantWalker {
 
     private OutputRenderer outputRenderer;
 
-    private final List<FeatureInput<? extends Feature>> manualLocatableFeatureInputs = new ArrayList<>();
+    private List<FeatureInput<? extends Feature>> manualLocatableFeatureInputs;
 
     private FuncotationEngine funcotationEngine;
 
@@ -337,7 +337,7 @@ public class Funcotator extends VariantWalker {
         }
 
         // Next set up our transcript list:
-        userTranscriptIdSet = processTranscriptList(userTranscriptIdSet);
+        final Set<String> finalUserTranscriptIdSet = processTranscriptList(userTranscriptIdSet);
 
         final LinkedHashMap<String, String> annotationDefaultsMap = splitAnnotationArgsIntoMap(annotationDefaults);
         final LinkedHashMap<String, String> annotationOverridesMap = splitAnnotationArgsIntoMap(annotationOverrides);
@@ -346,14 +346,15 @@ public class Funcotator extends VariantWalker {
         // Sort data sources to make them process in the same order each time:
         dataSourceDirectories.sort(Comparator.naturalOrder());
         final Map<Path, Properties> configData = DataSourceUtils.getAndValidateDataSourcesFromPaths(referenceVersion, dataSourceDirectories);
-        initializeManualFeaturesForLocatableDataSources(configData);
+        manualLocatableFeatureInputs = createManualFeaturesForLocatableDataSources(configData);
 
 
         // Create the metadata directly from the input.
         funcotationEngine = new FuncotationEngine(VcfFuncotationMetadata.create(new ArrayList<>(getHeaderForVariants().getInfoHeaderLines())),
-                DataSourceUtils.createDataSourceFuncotationFactoriesForDataSources(configData, annotationOverridesMap, transcriptSelectionMode, userTranscriptIdSet));
+                DataSourceUtils.createDataSourceFuncotationFactoriesForDataSources(configData, annotationOverridesMap, transcriptSelectionMode, finalUserTranscriptIdSet));
 
         // Determine which annotations are accounted for (by the funcotation factories) and which are not.
+        // TODO: Move this into the FuncotationEngine
         final LinkedHashMap<String, String> unaccountedForDefaultAnnotations = getUnaccountedForAnnotations( funcotationEngine.getDataSourceFactories(), annotationDefaultsMap );
         final LinkedHashMap<String, String> unaccountedForOverrideAnnotations = getUnaccountedForAnnotations( funcotationEngine.getDataSourceFactories(), annotationOverridesMap );
 
@@ -539,11 +540,9 @@ public class Funcotator extends VariantWalker {
 
         //==============================================================================================================
 
-        // Get our manually-specified feature inputs:
-
-        // TODO: Can I get rid of the featureSourceMap?
         final Map<String, List<Feature>> featureSourceMap = new HashMap<>();
 
+        // Each FeatureInput is one of the locatable datasources, which is queried using the featurecontext.
         for ( final FeatureInput<? extends Feature> featureInput : manualLocatableFeatureInputs ) {
             @SuppressWarnings("unchecked")
             final List<Feature> featureList = (List<Feature>)featureContext.getValues(featureInput);
@@ -580,7 +579,8 @@ public class Funcotator extends VariantWalker {
         return annotationMap;
     }
 
-    private void initializeManualFeaturesForLocatableDataSources(final Map<Path, Properties> metaData) {
+    private List<FeatureInput<? extends Feature>> createManualFeaturesForLocatableDataSources(final Map<Path, Properties> metaData) {
+        final List<FeatureInput<? extends Feature>> result = new ArrayList<>();
         for ( final Map.Entry<Path, Properties> entry : metaData.entrySet() ) {
 
             logger.debug("Initializing Features for: " + entry.getValue().getProperty("name") + " ...");
@@ -590,15 +590,15 @@ public class Funcotator extends VariantWalker {
             switch ( FuncotatorArgumentDefinitions.DataSourceType.getEnum(stringType) ) {
                 case LOCATABLE_XSV:
                     // Add our features manually so we can match over them:
-                    manualLocatableFeatureInputs.add(createFeatureInputForLocatableDataSource(entry.getKey(), entry.getValue(), XsvTableFeature.class));
+                    result.add(createFeatureInputForLocatableDataSource(entry.getKey(), entry.getValue(), XsvTableFeature.class, lookaheadFeatureCachingInBp));
                     break;
                 case GENCODE:
                     // Add our features manually so we can match over them:
-                    manualLocatableFeatureInputs.add(createFeatureInputForLocatableDataSource(entry.getKey(), entry.getValue(), GencodeGtfFeature.class));
+                    result.add(createFeatureInputForLocatableDataSource(entry.getKey(), entry.getValue(), GencodeGtfFeature.class, lookaheadFeatureCachingInBp));
                     break;
                 case VCF:
                     // Add our features manually so we can match over them:
-                    manualLocatableFeatureInputs.add(createFeatureInputForLocatableDataSource(entry.getKey(), entry.getValue(), VariantContext.class));
+                    result.add(createFeatureInputForLocatableDataSource(entry.getKey(), entry.getValue(), VariantContext.class, lookaheadFeatureCachingInBp));
                     break;
                 // Non-locatable data source types go here:
                 case SIMPLE_XSV:
@@ -608,11 +608,12 @@ public class Funcotator extends VariantWalker {
                     throw new GATKException("Unknown type of DataSourceFuncotationFactory encountered: " + stringType );
             }
         }
+        return result;
     }
 
-    private FeatureInput<? extends Feature> createFeatureInputForLocatableDataSource(final Path dataSourceFile,
+    private static FeatureInput<? extends Feature> createFeatureInputForLocatableDataSource(final Path dataSourceFile,
                                                           final Properties dataSourceProperties,
-                                                          final Class<? extends Feature> featureClazz) {
+                                                          final Class<? extends Feature> featureClazz, final int lookaheadFeatureCachingInBp) {
 
         final String name = dataSourceProperties.getProperty(DataSourceUtils.CONFIG_FILE_FIELD_NAME_NAME);
 

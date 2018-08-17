@@ -5,12 +5,12 @@ import htsjdk.tribble.Feature;
 import htsjdk.variant.variantcontext.VariantContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.broadinstitute.hellbender.engine.FeatureInput;
 import org.broadinstitute.hellbender.engine.ReferenceContext;
 import org.broadinstitute.hellbender.tools.funcotator.dataSources.gencode.GencodeFuncotation;
 
 import java.io.Closeable;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * An abstract class to allow for the creation of a {@link Funcotation} for a given data source.
@@ -36,6 +36,12 @@ public abstract class DataSourceFuncotationFactory implements Closeable {
      * Map of ANNOTATION_NAME -> OVERRIDE_VALUE.
      */
     protected Map<String, String> annotationOverrideMap;
+
+    /**
+     * The backing data store as a FeatureInput to leverage tribble querying.  Can be {@code null} for non-locatable
+     * funcotation factories.
+     */
+    protected FeatureInput<? extends Feature> mainSourceFileAsFeatureInput;
 
     /**
      * Set values in {@link DataSourceFuncotationFactory#annotationOverrideMap} based on the given annotation override values
@@ -106,11 +112,11 @@ public abstract class DataSourceFuncotationFactory implements Closeable {
      * Accounts for override values passed into the constructor as well.
      * @param variant {@link VariantContext} to annotate.
      * @param referenceContext {@link ReferenceContext} corresponding to the given {@code variant}.
-     * @param featureSourceMap {@link Map} of {@link String} -> {@link List} of {@link Feature} (data source name -> data source features corresponding to the given {@code variant}.
+     * @param featureList {@link Map} of {@link String} -> {@link List} of {@link Feature} (data source name -> data source features corresponding to the given {@code variant}.
      * @return {@link List} of {@link Funcotation} given the {@code variant}, {@code referenceContext}, and {@code featureContext}.  This should never be empty.
      */
-    public List<Funcotation> createFuncotations(final VariantContext variant, final ReferenceContext referenceContext, final Map<String, List<Feature>> featureSourceMap) {
-        return createFuncotations(variant, referenceContext, featureSourceMap, null);
+    public List<Funcotation> createFuncotations(final VariantContext variant, final ReferenceContext referenceContext, final List<Feature> featureList) {
+        return createFuncotations(variant, referenceContext, featureList, null);
     }
 
     /**
@@ -119,14 +125,11 @@ public abstract class DataSourceFuncotationFactory implements Closeable {
      * Accounts for override values passed into the constructor as well.
      * @param variant {@link VariantContext} to annotate.
      * @param referenceContext {@link ReferenceContext} corresponding to the given {@code variant}.
-     * @param featureSourceMap {@link Map} of {@link String} -> {@link List} of {@link Feature} (data source name -> data source features corresponding to the given {@code variant}.
+     * @param featureList  {@link List} of {@link Feature} data source features corresponding to the given {@code variant}.
      * @param gencodeFuncotations {@link List} of {@link GencodeFuncotation} that have already been created for the given {@code variant}/{@code referenceContext}/{@code featureContext}.
      * @return {@link List} of {@link Funcotation} given the {@code variant}, {@code referenceContext}, and {@code featureContext}.  This should never be empty.
      */
-    public List<Funcotation> createFuncotations(final VariantContext variant, final ReferenceContext referenceContext, final Map<String, List<Feature>> featureSourceMap, final List<GencodeFuncotation> gencodeFuncotations) {
-
-        // Get the features that this funcotation factory is responsible for:
-        final List<Feature> featureList = getFeatureListFromMap(featureSourceMap);
+    public List<Funcotation> createFuncotations(final VariantContext variant, final ReferenceContext referenceContext, final List<Feature> featureList, final List<GencodeFuncotation> gencodeFuncotations) {
 
         final List<Funcotation> outputFuncotations;
 
@@ -173,30 +176,6 @@ public abstract class DataSourceFuncotationFactory implements Closeable {
             }
         }
         return foundCompatibleFeature;
-    }
-
-    /**
-     * Get the list of features to annotate from the given Map of features.
-     * Extracts the feature list given the name of this {@link DataSourceFuncotationFactory}.
-     * @param featureSourceMap {@link Map} of {@link String} -> ({@link List} of {@link Feature}) (Data source name -> feature list) containing all features that could be used for this {@link DataSourceFuncotationFactory}.
-     * @return A {@link List} of {@link Feature} that are to be annotated by this {@link DataSourceFuncotationFactory}
-     */
-    private List<Feature> getFeatureListFromMap(final Map<String, List<Feature>> featureSourceMap) {
-        // Get the features that this funcotation factory is responsible for:
-        final List<Feature> featureList;
-
-        // Only worry about name filtering if we care about the specific feature type:
-        // NOTE: This should probably be fixed to key off some other abstract class logic.
-        if ( getAnnotationFeatureClass().equals(Feature.class) ) {
-            featureList = featureSourceMap.entrySet().stream()
-                    .map(Map.Entry::getValue)
-                    .flatMap(Collection::stream)
-                    .collect(Collectors.toList());
-        }
-        else {
-            featureList = featureSourceMap.getOrDefault( getName(), Collections.emptyList() );
-        }
-        return featureList;
     }
 
     /**

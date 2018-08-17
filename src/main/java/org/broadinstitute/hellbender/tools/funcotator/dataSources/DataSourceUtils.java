@@ -268,7 +268,7 @@ final public class DataSourceUtils {
                     funcotationFactory = DataSourceUtils.createGencodeDataSource(path, properties, annotationOverridesMap, transcriptSelectionMode, userTranscriptIdSet);
                     break;
                 case VCF:
-                    funcotationFactory = DataSourceUtils.createVcfDataSource(path, properties, annotationOverridesMap, transcriptSelectionMode, userTranscriptIdSet);
+                    funcotationFactory = DataSourceUtils.createVcfDataSource(path, properties, annotationOverridesMap);
                     break;
                 default:
                     throw new GATKException("Unknown type of DataSourceFuncotationFactory encountered: " + stringType );
@@ -289,7 +289,7 @@ final public class DataSourceUtils {
      * @param annotationOverridesMap {@link LinkedHashMap}{@code <String->String>} containing any annotation overrides to be included in the resulting data source.  Must not be {@code null}.
      * @return A new {@link LocatableXsvFuncotationFactory} based on the given data source file information and field overrides map.
      */
-    public static LocatableXsvFuncotationFactory createLocatableXsvDataSource(final Path dataSourceFile,
+    private static LocatableXsvFuncotationFactory createLocatableXsvDataSource(final Path dataSourceFile,
                                                                               final Properties dataSourceProperties,
                                                                               final LinkedHashMap<String, String> annotationOverridesMap) {
         Utils.nonNull(dataSourceFile);
@@ -298,6 +298,7 @@ final public class DataSourceUtils {
 
         final String name      = dataSourceProperties.getProperty(CONFIG_FILE_FIELD_NAME_NAME);
         final String version   = dataSourceProperties.getProperty(CONFIG_FILE_FIELD_NAME_VERSION);
+        final String sourceFile   = dataSourceProperties.getProperty(CONFIG_FILE_FIELD_NAME_SRC_FILE);
 
         // Create a locatable XSV feature reader to handle XSV Locatable features:
         final LocatableXsvFuncotationFactory locatableXsvFuncotationFactory = new LocatableXsvFuncotationFactory(name, version, annotationOverridesMap);
@@ -323,7 +324,7 @@ final public class DataSourceUtils {
      * @param annotationOverridesMap {@link LinkedHashMap}{@code <String->String>} containing any annotation overrides to be included in the resulting data source.  Must not be {@code null}.
      * @return A new {@link SimpleKeyXsvFuncotationFactory} based on the given data source file information and field overrides map.
      */
-    public static SimpleKeyXsvFuncotationFactory createSimpleXsvDataSource(final Path dataSourceFile,
+    private static SimpleKeyXsvFuncotationFactory createSimpleXsvDataSource(final Path dataSourceFile,
                                                                    final Properties dataSourceProperties,
                                                                    final LinkedHashMap<String, String> annotationOverridesMap) {
 
@@ -352,7 +353,7 @@ final public class DataSourceUtils {
      * @param annotationOverridesMap {@link LinkedHashMap}{@code <String->String>} containing any annotation overrides to be included in the resulting data source.  Must not be {@code null}.
      * @return A new {@link CosmicFuncotationFactory} based on the given data source file information and field overrides map.
      */
-    public static CosmicFuncotationFactory createCosmicDataSource(final Path dataSourceFile,
+    private static CosmicFuncotationFactory createCosmicDataSource(final Path dataSourceFile,
                                                                 final Properties dataSourceProperties,
                                                                 final LinkedHashMap<String, String> annotationOverridesMap) {
         Utils.nonNull(dataSourceFile);
@@ -377,7 +378,7 @@ final public class DataSourceUtils {
      * @param userTranscriptIdSet {@link Set} of {@link String}s containing transcript IDs of interest to be selected for first.  Must not be {@code null}.
      * @return A new {@link GencodeFuncotationFactory} based on the given data source file information, field overrides map, and transcript information.
      */
-    public static GencodeFuncotationFactory createGencodeDataSource(final Path dataSourceFile,
+    private static GencodeFuncotationFactory createGencodeDataSource(final Path dataSourceFile,
                                                                  final Properties dataSourceProperties,
                                                                  final LinkedHashMap<String, String> annotationOverridesMap,
                                                                  final TranscriptSelectionMode transcriptSelectionMode,
@@ -409,21 +410,15 @@ final public class DataSourceUtils {
      * @param dataSourceFile {@link Path} to the data source file.  Must not be {@code null}.
      * @param dataSourceProperties {@link Properties} consisting of the contents of the config file for the data source.  Must not be {@code null}.
      * @param annotationOverridesMap {@link LinkedHashMap}{@code <String->String>} containing any annotation overrides to be included in the resulting data source.  Must not be {@code null}.
-     * @param transcriptSelectionMode {@link TranscriptSelectionMode} to use when choosing the transcript for detailed reporting.  Must not be {@code null}.
-     * @param userTranscriptIdSet {@link Set} of {@link String}s containing transcript IDs of interest to be selected for first.  Must not be {@code null}.
      * @return A new {@link GencodeFuncotationFactory} based on the given data source file information, field overrides map, and transcript information.
      */
-    public static VcfFuncotationFactory createVcfDataSource(final Path dataSourceFile,
+    private static VcfFuncotationFactory createVcfDataSource(final Path dataSourceFile,
                                                             final Properties dataSourceProperties,
-                                                            final LinkedHashMap<String, String> annotationOverridesMap,
-                                                            final TranscriptSelectionMode transcriptSelectionMode,
-                                                            final Set<String> userTranscriptIdSet) {
+                                                            final LinkedHashMap<String, String> annotationOverridesMap) {
 
         Utils.nonNull(dataSourceFile);
         Utils.nonNull(dataSourceProperties);
         Utils.nonNull(annotationOverridesMap);
-        Utils.nonNull(transcriptSelectionMode);
-        Utils.nonNull(userTranscriptIdSet);
 
         // Get some metadata:
         final String name      = dataSourceProperties.getProperty(CONFIG_FILE_FIELD_NAME_NAME);
