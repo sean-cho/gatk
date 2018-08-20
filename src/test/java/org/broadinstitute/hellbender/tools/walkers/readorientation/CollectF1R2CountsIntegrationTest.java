@@ -64,8 +64,8 @@ public class CollectF1R2CountsIntegrationTest extends CommandLineProgramTest {
          *
          * coord.:    99,990             100,000             100,010             100,020
          *              |                   |                   |                   |
-         * reference: | T C A T C A C A C T C A C T A A G C A C A C A G A G A A T A A T
-         * alt read:  | T C A T C A C A C T C T C T G A C C A A A G A G A A T A A T A A
+         * reference:   T C A T C A C A C T C A C T A A G C A C A C A G A G A A T A A T
+         * alt read:    T C A T C A C A C T C T C T G A C C A A A G A G A A T A A T A A
          *                                    *     *   *     *
          *
          * At each alt site, we have 75 ref and 25 alt reads
@@ -201,8 +201,6 @@ public class CollectF1R2CountsIntegrationTest extends CommandLineProgramTest {
 
         // create a sample list
         final int chromosomeIndex = 0;
-        final String sampleName = "samthreetree";
-        final SampleList sampleList = new IndexedSampleList(sampleName);
 
         // specify characteristics of reads
         final int depth = altDepth + refDepth;
