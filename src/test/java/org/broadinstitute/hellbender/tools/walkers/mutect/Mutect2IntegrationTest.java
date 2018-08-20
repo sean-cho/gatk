@@ -120,7 +120,7 @@ public class Mutect2IntegrationTest extends CommandLineProgramTest {
                         Assert.assertTrue(vc.getAlleles().stream().anyMatch(a -> a.getBases().length == 1));
                     }
                 });
-        
+
         // run Concordance
         final File concordanceSummary = createTempFile("concordance", ".txt");
         new Main().instanceMain(makeCommandLineArgs(Arrays.asList("-truth", truthVcf.getAbsolutePath(), "-eval", filteredVcf.getAbsolutePath(), "-L", "20", "-XL", mask.getAbsolutePath(), "-summary", concordanceSummary.getAbsolutePath()), "Concordance"));
@@ -574,7 +574,7 @@ public class Mutect2IntegrationTest extends CommandLineProgramTest {
     }
 
     @Test()
-    public void testAnnotations() throws IOException {
+    public void testBaseQualityFilter() throws IOException {
         // Create a test sam file
         final File samFile = File.createTempFile("synthetic", ".bam");
         final SAMFileHeader samHeader = M2TestingUtils.createSamHeader();
@@ -610,7 +610,6 @@ public class Mutect2IntegrationTest extends CommandLineProgramTest {
         Assert.assertTrue(vc.isPresent());
         Assert.assertEquals(vc.get().getStart(), M2TestingUtils.DEFAULT_SNP_POSITION);
         Assert.assertFalse(vc.get().getFilters().contains(GATKVCFConstants.MEDIAN_BASE_QUALITY_FILTER_NAME));
-
     }
 
     private void doMutect2Test(
