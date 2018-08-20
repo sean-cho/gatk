@@ -32,6 +32,7 @@ public class M2TestingUtils {
     public static final byte[] DEFAULT_REF_BASES = "CATCACACTCACTAAGCACACAGAGAATAAT".getBytes();
     // Bases for C->T SNP at position 100,000                *
     public static final byte[] DEFAULT_ALT_BASES = "CATCACACTTACTAAGCACACAGAGAATAAT".getBytes();
+    public static final int DEFAULT_SNP_POSITION = 100_000;
     public static final String DEFAULT_SAMPLE_NAME = "sample1";
 
     public static SAMFileGATKReadWriter getBareBonesSamWriter(final File samFile, final SAMFileHeader samHeader) {
