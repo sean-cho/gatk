@@ -14,8 +14,8 @@ workflow CNNScoreVariantsWorkflow {
     File reference_fasta_index
     File resource_fofn              # File of VCF file names of resources of known SNPs and INDELs, (e.g. mills, gnomAD)
     File resource_fofn_index        # File of VCF file indices of resources
-    String? bam_file                # Bam (or bamout) file from which input_vcf was called, required by read-level architectures
-    String? bam_file_index
+    File? bam_file                  # Bam (or bamout) file from which input_vcf was called, required by read-level architectures
+    File? bam_file_index
     File? architecture_json         # Neural Net configuration for CNNScoreVariants
     File? architecture_hd5          # Pre-Trained weights and architecture for CNNScoreVariants
     String? tensor_type             # Keyword indicating the shape of the input tensor (e.g. read_tensor, reference)
@@ -106,14 +106,14 @@ workflow CNNScoreVariantsWorkflow {
 }
 
 task CNNScoreVariants {
-    String input_vcf
+    File input_vcf
     File input_vcf_index
     File reference_fasta
     File reference_dict
     File reference_fasta_index
     String output_prefix
-    String? bam_file
-    String? bam_file_index
+    File? bam_file
+    File? bam_file_index
     File? architecture_json
     File? architecture_hd5
     Int? inference_batch_size
