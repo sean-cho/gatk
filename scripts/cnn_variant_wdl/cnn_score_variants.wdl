@@ -133,7 +133,7 @@ task CNNScoreVariants {
     Int? cpu 
 
     # You may have to change the following two parameter values depending on the task requirements
-    Int default_ram_mb = 3000
+    Int default_ram_mb = 6000
     # WARNING: In the workflow, you should calculate the disk space as an input to this task (disk_space_gb).
     Int default_disk_space_gb = 100
 

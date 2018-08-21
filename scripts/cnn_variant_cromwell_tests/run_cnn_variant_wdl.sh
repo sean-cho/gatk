@@ -36,3 +36,4 @@ echo "Running CNN Score Variants WDL through cromwell"
 ln -fs $WORKING_DIR/gatk/scripts/cnn_variant_wdl/cnn_score_variants.wdl
 sudo java -jar $CROMWELL_JAR run $WORKING_DIR/gatk/scripts/cnn_variant_wdl/cnn_score_variants.wdl -i $WORKING_DIR/cnn_score_variants_travis.json
 
+cat /home/travis/build/broadinstitute/gatk/scripts/cromwell-executions/CNNScoreVariantsWorkflow/*/call-CNNScoreVariants/shard-0/execution/stderr
