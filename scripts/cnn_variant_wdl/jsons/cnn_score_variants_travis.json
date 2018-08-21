@@ -18,6 +18,6 @@
   "CNNScoreVariantsWorkflow.inter_op_threads": 0,
   "CNNScoreVariantsWorkflow.tensor_type": "read_tensor",
   "CNNScoreVariantsWorkflow.info_key": "CNN_2D",
-  "CNNScoreVariantsWorkflow.tranches": "--tranche 99.0",
+  "CNNScoreVariantsWorkflow.tranches": "--snp-tranche 99.9 --indel-tranche 99.0",
   "CNNScoreVariantsWorkflow.scatter_count": "2"
 }

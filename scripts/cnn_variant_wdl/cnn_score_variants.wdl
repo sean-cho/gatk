@@ -80,6 +80,7 @@ workflow CNNScoreVariantsWorkflow {
         input: 
             input_vcfs = CNNScoreVariants.cnn_annotated_vcf,
             output_vcf_name = output_prefix,
+            preemptible_attempts = preemptible_attempts,
             gatk_override = gatk_override,
             gatk_docker = gatk_docker
     }
