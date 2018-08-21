@@ -280,7 +280,7 @@ command <<<
 
 
 task FilterVariantTranches {
-    String input_vcf
+    File input_vcf
     File input_vcf_index
     File resource_fofn
     File resource_fofn_index

@@ -1,7 +1,7 @@
 {
   "CNNScoreVariantsWorkflow.bam_file": "/home/travis/build/broadinstitute/gatk/src/test/resources/large/VQSR/g94982_chr20_1m_10m_bamout.bam",
   "CNNScoreVariantsWorkflow.bam_file_index": "/home/travis/build/broadinstitute/gatk/src/test/resources/large/VQSR/g94982_chr20_1m_10m_bamout.bam",
-  "CNNScoreVariantsWorkflow.calling_intervals": "/home/travis/build/broadinstitute/gatk/scripts/m2_cromwell_tests/interval_list.interval_list",
+  "CNNScoreVariantsWorkflow.calling_intervals": "/home/travis/build/broadinstitute/gatk/src/test/resources/large/VQSR/contig20_1m_10m.interval_list",
   "CNNScoreVariantsWorkflow.cnn_gatk_docker": "__GATK_DOCKER__",
   "CNNScoreVariantsWorkflow.gatk_docker": "__GATK_DOCKER__",
   "CNNScoreVariantsWorkflow.input_vcf": "/home/travis/build/broadinstitute/gatk/src/test/resources/large/VQSR/g94982_b37_chr20_1m_895.vcf.gz",
@@ -16,7 +16,7 @@
   "CNNScoreVariantsWorkflow.transfer_batch_size": "2",
   "CNNScoreVariantsWorkflow.intra_op_threads": 0,
   "CNNScoreVariantsWorkflow.inter_op_threads": 0,
-  "CNNScoreVariantsWorkflow.tensor_type": "reference",
+  "CNNScoreVariantsWorkflow.tensor_type": "read_tensor",
   "CNNScoreVariantsWorkflow.info_key": "CNN_2D",
   "CNNScoreVariantsWorkflow.tranches": "--snp-tranche 99.9 --indel-tranche 99.5",
   "CNNScoreVariantsWorkflow.scatter_count": "2"
