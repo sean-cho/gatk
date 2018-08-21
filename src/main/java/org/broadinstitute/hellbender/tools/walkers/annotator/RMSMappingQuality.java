@@ -130,13 +130,14 @@ public final class RMSMappingQuality extends InfoFieldAnnotation implements Stan
                     throw new UserException.BadInput("MQ annotation data is not properly formatted. This version expects an " +
                             "int tuple of sum of squared MQ values and total reads over variant genotypes.");
                 }
-                rawMQdata += "," + rawMQdata;
+                rawMQdata = Math.round(Double.parseDouble(rawMQdata)) + "," + rawMQdepth;  //deprecated format was double so it needs to be converted to int
             }
             else {
-                logger.warn("MQ annotation data is not properly formatted and will be dropped. This GATK version expects key "
+                logger.warn("MQ annotation data is not properly formatted. This GATK version expects key "
                         + getRawKeyName() + " with an int tuple of sum of squared MQ values and total reads over variant "
-                        + "genotypes as the value. To process this input, use the version of GATK with which it was created.");
-                return new HashMap<>();
+                        + "genotypes as the value. Attempting to use deprecated MQ calculation.");
+                final int numOfReads = getNumOfReads(vc, null);
+                rawMQdata = Math.round(Double.parseDouble(rawMQdata)) + "," + numOfReads;   //deprecated format was double so it needs to be converted to int
             }
         }
         else {
