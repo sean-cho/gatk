@@ -105,14 +105,6 @@ public class GenotypeGVCFsIntegrationTest extends CommandLineProgramTest {
         };
     }
 
-    @DataProvider(name = "gvcfWithNewMQFormat")
-    public Object[][] gvcfWithNewMQFormat() {
-        return new Object[][]{
-                {NA12878_HG37, getTestFile("newMQcalc.singleSample.genotyped.vcf"), NO_EXTRA_ARGS, b37_reference_20_21},
-
-        };
-    }
-
     @DataProvider(name = "gvcfWithPPs")
     public Object[][] gvcfWithPPs() {
         return new Object[][] {
@@ -121,6 +113,13 @@ public class GenotypeGVCFsIntegrationTest extends CommandLineProgramTest {
         };
     }
 
+    @DataProvider(name = "gvcfWithNewMQFormat")
+    public Object[][] gvcfWithNewMQFormat() {
+        return new Object[][]{
+                {NA12878_HG37, getTestFile("newMQcalc.singleSample.genotyped.vcf"), new SimpleInterval("20", 1, 11_000_000), b37_reference_20_21},
+
+        };
+    }
 
     /*
     This test is useful for testing changes in GATK4 versus different versions of GATK3.
