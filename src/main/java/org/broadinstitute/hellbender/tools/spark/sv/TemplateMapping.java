@@ -19,7 +19,8 @@ import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
 /**
- * Created by valentin on 6/9/17.
+ * Contains information as to how a template maps against a
+ * haplotype or contig.
  */
 public class TemplateMapping implements Serializable {
 
@@ -193,15 +194,7 @@ public class TemplateMapping implements Serializable {
         return false;
     }
 
-    public boolean fragmentsOverlapOnContig() {
-        if (firstAlignmentIntervals == null || secondAlignmentIntervals == null) {
-            return false;
-        } else {
-            return firstAlignmentIntervals.stream().map(ai -> ai.referenceSpan)
-                    .anyMatch(rs -> secondAlignmentIntervals.stream().map(ai -> ai.referenceSpan).anyMatch(rs2 -> rs2.overlaps(rs)));
-        }
-    }
-
+    @SuppressWarnings("unused") // may be useful in the future.
     public boolean crossesBreakPointCountingClippedBases(final int[] breakPoints) {
         int minCoordinate = Integer.MAX_VALUE;
         int maxCoordinate = 0;
@@ -217,141 +210,5 @@ public class TemplateMapping implements Serializable {
         }
         return false;
     }
-
-    public int insertSizeCountingClippedBases() {
-        if (!pairOrientation.isProper()) {
-            return -1;
-        } else if (firstAlignmentIntervals == null || firstAlignmentIntervals.isEmpty()) {
-            return -1;
-        } else if (secondAlignmentIntervals == null || secondAlignmentIntervals.isEmpty()) {
-            return -1;
-        } else {
-            int minCoordinate = Integer.MAX_VALUE;
-            int maxCoordinate = 0;
-            for (final AlignmentInterval interval : Utils.concat(firstAlignmentIntervals, secondAlignmentIntervals)) {
-                final SimpleInterval referenceSpan = interval.referenceSpan;
-                final int minRefPos = referenceSpan.getStart() - CigarUtils.countLeftClippedBases(interval.cigarAlongReference());
-                final int maxRefPos = referenceSpan.getStart() - CigarUtils.countRightClippedBases(interval.cigarAlongReference());
-                if (minRefPos < minCoordinate) minCoordinate = minRefPos;
-                if (maxRefPos > maxCoordinate) maxCoordinate = maxRefPos;
-            }
-            return maxCoordinate - minCoordinate + 1;
-        }
-    }
-
-/*
-    public double overlapMismatchesPenalty(final byte[] fragment1, final byte[] fragment2) {
-        if (!fragmentsOverlapOnContig()) {
-            return 0.0;
-        } else {
-            int mismatches = 0;
-            int inserts = 0;
-            int totalInsertLength = 0;
-            final List<AlignmentInterval> algs1 = firstAlignmentIntervals;
-            final List<AlignmentInterval> algs2 = secondAlignmentIntervals;
-            for (final AlignmentInterval ai1 : algs1) {
-                for (final AlignmentInterval ai2 : algs2) {
-                    if (!ai1.referenceSpan.overlaps(ai2.referenceSpan)) {
-                       continue;
-                    }
-                    final int readIncr1 = ai1.forwardStrand ? 1 : -1;
-                    final int readIncr2 = ai2.forwardStrand ? 1 : -1;
-                    int refPos1 = ai1.referenceSpan.getStart();
-                    int readPos1 = ai1.forwardStrand ? ai1.startInAssembledContig : ai1.endInAssembledContig;
-                    int readPos2 = ai2.forwardStrand ? ai2.startInAssembledContig : ai2.endInAssembledContig;
-                    int refPos2 = ai2.referenceSpan.getStart();
-                    Deque<CigarElement> cigar1 = new ArrayDeque<>(CigarUtils.trimReadToUnclippedBases(ai1.cigarAlongReference()).getCigarElements());
-                    Deque<CigarElement> cigar2 = new ArrayDeque<>(CigarUtils.trimReadToUnclippedBases(ai2.cigarAlongReference()).getCigarElements());
-                    while (!cigar1.isEmpty() && !cigar2.isEmpty()) {
-                        if (refPos1 < refPos2) {
-                            while (!cigar1.isEmpty() && !cigar1.getFirst().getOperator().consumesReferenceBases()) {
-                                final CigarElement ce1 = cigar1.remove();
-                                if (ce1.getOperator().consumesReadBases()) {
-                                    readPos1 = ce1.getLength() * readIncr1;
-                                }
-                            }
-                            if (cigar1.isEmpty()) {
-                                break;
-                            } else {
-                                final CigarElement element = cigar1.remove();
-                                if (element.getLength() + refPos1 < refPos2) {
-                                    refPos1 += element.getLength();
-                                    readPos1 += element.getOperator().consumesReadBases()
-                                            ? (element.getLength() * readIncr1) : 0;
-
-                                } else {
-                                    final int newLength = refPos2 - refPos1;
-                                    if (newLength > 0) {
-                                        cigar1.push(new CigarElement(refPos2 - refPos1, element.getOperator()));
-                                    }
-                                    readPos1 += element.getOperator().consumesReadBases()
-                                            ? newLength * readIncr1 : 0;
-                                    refPos1 = readPos2;
-                                }
-                            }
-                        } else if (refPos2 < refPos1) {
-                            while (!cigar2.isEmpty() && !cigar2.getFirst().getOperator().consumesReferenceBases()) {
-                                final CigarElement ce2 = cigar2.remove();
-                                if (ce2.getOperator().consumesReadBases()) {
-                                    readPos1 = ce2.getLength() * readIncr2;
-                                }
-                            }
-                            if (cigar2.isEmpty()) {
-                                break;
-                            } else {
-                                final CigarElement element = cigar2.remove();
-                                if (element.getLength() + refPos2 < refPos1) {
-                                    refPos2 += element.getLength();
-                                    readPos2 += element.getOperator().consumesReadBases()
-                                            ? (element.getLength() * readIncr2) : 0;
-
-                                } else {
-                                    final int newLength = refPos1 - refPos2;
-                                    if (newLength > 0) {
-                                        cigar1.push(new CigarElement(refPos1 - refPos2, element.getOperator()));
-                                    }
-                                    readPos2 += element.getOperator().consumesReadBases()
-                                            ? newLength * readIncr2 : 0;
-                                    refPos2 = readPos1;
-                                }
-                            }
-                        } else { // same position ref1 == ref2
-                            final CigarElement ce1 = cigar1.remove();
-                            final CigarElement ce2 = cigar2.remove();
-                            if (ce1.getOperator().consumesReferenceBases() && ce2.getOperator().consumesReferenceBases()) {
-                                final int ce1Length = ce1.getLength();
-                                final int ce2Length = ce2.getLength();
-                                final int minLength = Math.min(ce1Length, ce2Length);
-                                if (ce1.getOperator().consumesReadBases() && ce2.getOperator().consumesReadBases()) {
-
-                                    for (int i = 0; i < minLength; i++) {
-                                        final byte b1 = fragment1[readPos1 + readIncr1 * i];
-                                        final byte b2 = fragment2[readPos2 + readIncr2 * i];
-                                        if (!Nucleotide.same(b1, b2)) {
-                                            mismatches++;
-                                        }
-                                    }
-                                    readPos1 += readIncr1 * minLength;
-                                    readPos2 += readIncr2 * minLength;
-                                    refPos1 += minLength;
-                                    refPos2 += minLength;
-                                    if (ce1Length < ce2Length) {
-                                        cigar2.push(new CigarElement(ce2Length - ce1Length, ce2.getOperator()));
-                                    }
-                                } else {
-                                    refPos1 += ce1Length;
-                                    refPos2 += ce2Length;
-                                    if (ce1Length != ce2Length) {
-                                        inserts++;
-                                        totalInsertLength += Math.abs(ce1Length - ce2Length);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }*/
 
 }

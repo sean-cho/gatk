@@ -134,6 +134,7 @@ public class TemplateMappingTable implements Serializable {
                 }).toArray();
     }
 
+    @SuppressWarnings("unused") // may be useful in the future.
     public void dropUninformativeTemplates() {
         final int[] informativeIndexes = informativeTemplateIndexes();
         if (informativeIndexes.length == 0) {
@@ -162,10 +163,6 @@ public class TemplateMappingTable implements Serializable {
                 mappingInfo[j] = newMappingInfo;
             }
         } // else {...} no changes.
-    }
-
-    public double[] getRow(final int i) {
-        return values[Utils.validIndex(i, values.length)].clone();
     }
 
     public void calculateBestMappingScores() {

@@ -155,11 +155,9 @@ public final class RealignmentScore {
                 final int matches = totalAligned - misMatches;
                 final int indelCount = (int) ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
                         .filter(ce -> ce.getOperator().isIndel())
-//                        .filter(ce -> ce.getLength() > parameters.shortIndelMaxLength)
                         .count();
                 final int indelLengthSum = ai.cigarAlong5to3DirectionOfContig.getCigarElements().stream()
                         .filter(ce -> ce.getOperator().isIndel())
-//                        .filter(ce -> ce.getLength() > parameters.shortIndelMaxLength)
                         .mapToInt(CigarElement::getLength).sum();
                 totalIndels += indelCount;
                 totalMatches += matches;
@@ -177,26 +175,20 @@ public final class RealignmentScore {
                 if (refIndelLength != 0 || ctgIndelLength != 0) {
                     final int indelLength = Math.max(Math.abs(refIndelLength) + Math.max(0, -ctgIndelLength), Math.abs(ctgIndelLength));
                     // The max(0, -ctgIndelLength) is to correct of short overlaps on the contig due to short "unclipped" soft-clips.
-//                    if (indelLength > parameters.shortIndelMaxLength) {
-                        totalIndels++;
-                        totalIndelLength += indelLength;
-//                    }
+                    totalIndels++;
+                    totalIndelLength += indelLength;
                 }
             }
             // Treat clippings as indels:
             if (intervals.get(0).startInAssembledContig > 1) {
                 final int indelLength = Math.min(intervals.get(0).startInAssembledContig - 1, intervals.get(0).referenceSpan.getStart());
-//                if (indelLength > parameters.shortIndelMaxLength) {
-                    totalIndelLength += indelLength;
-                    totalIndels++;
-//                }
+                totalIndelLength += indelLength;
+                totalIndels++;
             }
             if (intervals.get(intervals.size() - 1).endInAssembledContig < seq.length) {
                 final int indelLength = seq.length - intervals.get(intervals.size() - 1).endInAssembledContig;
-//                if (indelLength > parameters.shortIndelMaxLength) {
-                    totalIndelLength += indelLength;
-                    totalIndels++;
-//                }
+                totalIndelLength += indelLength;
+                totalIndels++;
             }
         }
         return new RealignmentScore(parameters, totalMatches, totalMismatches, totalIndels, totalIndelLength,

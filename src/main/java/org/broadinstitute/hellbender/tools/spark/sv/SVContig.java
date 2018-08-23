@@ -30,7 +30,6 @@ import java.util.OptionalDouble;
 @DefaultSerializer(SVContig.Serializer.class)
 public class SVContig extends ArraySVHaplotype {
 
-
     /**
      * @return {@link Double#NaN} if there is no alignment againts the reference haplotype.
      */
@@ -212,5 +211,4 @@ public class SVContig extends ArraySVHaplotype {
         }
         return (int) Math.round(callQuality.getAsDouble());
     }
-
 }

@@ -315,7 +315,6 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
             optional = true)
     private int paddingSize = DEFAULT_PADDING_SIZE;
 
-
     private VariantsSparkSource variantsSource;
     private ReadsSparkSource contigsSource;
     private int parallelism = 0;
@@ -348,25 +347,23 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
             this.element = element;
         }
 
+        @Override
         public String getContig() {
             return location.getContig();
         }
 
+        @Override
         public int getStart() {
             return location.getStart();
         }
 
+        @Override
         public int getEnd() {
             return location.getEnd();
         }
 
         public E get() {
             return element;
-        }
-
-        @SuppressWarnings("unchecked")
-        public static <E> Class<Localized<E>> getSubClass(final Class<E> elementClass) {
-            return (Class<Localized<E>>) (Class<?>) Localized.class;
         }
     }
 
@@ -384,7 +381,6 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                 emitStratifiedLikelihoods, emitStratifiedAlleleDepths);
         final String sampleName = outputVCFHeader.getSampleNamesInOrder().get(0);
         final String referenceFilePath = referenceArguments.getReferenceFileName();
-
 
         final List<SimpleInterval> intervals = this.hasUserSuppliedIntervals() ? getIntervals()
                 : IntervalUtils.getAllIntervalsForReference(dictionary);
@@ -530,7 +526,9 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
      * Compose a concise list of additional intervals to add given the missing primary alignment locations.
      * These intervals are padded and merged if they overlap so that we avoid redundancy:
      */
-    private static List<SimpleInterval> composeAdditionIntervalsToCoverMissingPrimaryContigAlignments(final int padding, final SVIntervalLocator locator, final List<SimpleInterval> additionalIntervals) {
+    private static List<SimpleInterval> composeAdditionIntervalsToCoverMissingPrimaryContigAlignments(final int padding,
+                                                                                                      final SVIntervalLocator locator,
+                                                                                                      final List<SimpleInterval> additionalIntervals) {
         final SVIntervalTree<SimpleInterval> mergeTree = new SVIntervalTree<>();
         for (final SimpleInterval interval : additionalIntervals) {
             final SVInterval svInterval = locator.toSVInterval(interval, padding);
@@ -614,7 +612,6 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
         return missingAlignments.stream().map(ai -> ai.referenceSpan).collect(Collectors.toList());
     }
 
-
     /**
      * Given an RDD of assembled contigs alignments as {@link GATKRead} it composes and RDD of {@link AlignedContig}.
      * <p>
@@ -653,7 +650,6 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
             final int parallelism) {
 
         // We group SVContext and GATKReads (assembled contigs) into common shards:
-
 
         // Notice that SVContext should be added to all shards where it has a break-point:
         final JavaPairRDD<SimpleInterval, List<SVContext>> variantsSharded = sharder
@@ -1515,7 +1511,6 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
             }
         }
 
-
         for (int j = 0; j < sampleLikelihoods.numberOfReads(); j++) {
             final boolean considerFirstFragment = scoreTable.getMappingInfo(context.refHaplotypeIndex, j).crossesBreakPoint(context.refBreakPoints)
                     || scoreTable.getMappingInfo(context.altHaplotypeIndex, j).crossesBreakPoint(context.altBreakPoints);
@@ -1615,7 +1610,6 @@ public class GenotypeStructuralVariantsSpark extends GATKSparkTool {
                 return false;
         }
     }
-
 
     private void tearDown(@SuppressWarnings("unused") final JavaSparkContext ctx) {
         variantsSource = null;

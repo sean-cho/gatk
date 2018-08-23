@@ -34,39 +34,22 @@ import java.util.stream.IntStream;
 final class SVGenotypingContext {
 
     final SVContext variant;
-
     final List<Template> templates;
-
     final List<SVHaplotype> haplotypes;
-
     private final Map<String, List<GATKRead>> sampleTemplatesAsUnmappedReads;
-
     private final SampleList sampleList;
-
     final SVHaplotype refHaplotype;
-
     final SVHaplotype altHaplotype;
-
     final int[] refBreakPoints;
-
     final int[] altBreakPoints;
-
     final Allele refAllele;
-
     final Allele altAllele;
-
     final int refHaplotypeIndex;
-
     final int altHaplotypeIndex;
-
     private final AlleleList<Allele> alleles;
-
     final int refAlleleIndex;
-
     final int altAlleleIndex;
-
     final int numberOfHaplotypes;
-
     final int numberOfTemplates;
 
     /**
