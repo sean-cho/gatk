@@ -28,7 +28,6 @@ workflow CNNScoreVariantsWorkflow {
     Int? inter_op_threads           # Tensorflow threading between nodes
     File? gatk_override
     String gatk_docker
-    String cnn_gatk_docker
     File calling_intervals
     Int scatter_count 
     Int? preemptible_attempts
@@ -69,7 +68,7 @@ workflow CNNScoreVariantsWorkflow {
                 output_prefix = output_prefix,
                 interval_list = calling_interval,
                 gatk_override = gatk_override,
-                cnn_gatk_docker = cnn_gatk_docker,
+                gatk_docker = gatk_docker,
                 preemptible_attempts = preemptible_attempts,
                 mem_gb = cnn_task_mem_gb,
                 cpu = cnn_task_cpu
@@ -127,7 +126,7 @@ task CNNScoreVariants {
 
     # Runtime parameters
     Int? mem_gb
-    String cnn_gatk_docker
+    String gatk_docker
     Int? preemptible_attempts
     Int? disk_space_gb
     Int? cpu 
@@ -164,7 +163,7 @@ command <<<
 >>>
 
   runtime {
-    docker: "${cnn_gatk_docker}"
+    docker: "${gatk_docker}"
     memory: machine_mem + " MB"
     disks: "local-disk " + select_first([disk_space_gb, default_disk_space_gb]) + " HDD"
     preemptible: select_first([preemptible_attempts, 3])
